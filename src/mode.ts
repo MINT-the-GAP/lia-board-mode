@@ -11,6 +11,7 @@ export function safeGetSettingsRaw(): string | null {
 
 export function findModeInJson(obj: unknown): string | null {
   const seen = new Set<object>();
+  const PRIORITY = new Set(["mode", "view", "layout", "format"]);
 
   function walk(v: unknown): string | null {
     if (v == null) return null;
@@ -27,18 +28,21 @@ export function findModeInJson(obj: unknown): string | null {
     if (seen.has(v as object)) return null;
     seen.add(v as object);
 
-    for (const k in (v as Record<string, unknown>)) {
-      if (!Object.prototype.hasOwnProperty.call(v, k)) continue;
-      const key = norm(k);
-      if (key === "mode" || key === "view" || key === "layout" || key === "format") {
-        const m = walk((v as Record<string, unknown>)[k]);
+    const rec = v as Record<string, unknown>;
+    const rest: string[] = [];
+
+    for (const k in rec) {
+      if (!Object.prototype.hasOwnProperty.call(rec, k)) continue;
+      if (PRIORITY.has(norm(k))) {
+        const m = walk(rec[k]);
         if (m) return m;
+      } else {
+        rest.push(k);
       }
     }
 
-    for (const k in (v as Record<string, unknown>)) {
-      if (!Object.prototype.hasOwnProperty.call(v, k)) continue;
-      const m = walk((v as Record<string, unknown>)[k]);
+    for (const k of rest) {
+      const m = walk(rec[k]);
       if (m) return m;
     }
 
