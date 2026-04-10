@@ -103,5 +103,5 @@ export function initEvents(tickFn: () => void): void {
     if (e.key === SETTINGS_KEY || e.key === FONT_KEY) tickFn();
   });
 
-  ROOT_WIN.setInterval(() => { if (I.__alive) tickFn(); }, 350);
+  ROOT_WIN.setInterval(() => { if (I.__alive) tickFn(); }, 5000);
 }
