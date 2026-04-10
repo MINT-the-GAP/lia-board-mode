@@ -49,7 +49,6 @@ import { initModeOnly } from "./modeOnly";
         }
 
         positionOverlayButton();
-        if (show) positionPanel();
 
         const modeOrSettingsChanged = (mode !== I.lastMode) || (settingsRaw !== I.lastSettingsRaw);
 
