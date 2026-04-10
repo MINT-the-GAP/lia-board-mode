@@ -13,7 +13,7 @@ function pxToStep0to2(px: number): number {
 
 function getMainFontPx(): number {
   const main = CONTENT_DOC.querySelector("main") || CONTENT_DOC.documentElement;
-  const fs = parseFloat(getComputedStyle(main).fontSize || "16");
+  const fs = parseFloat(CONTENT_WIN.getComputedStyle(main).fontSize || "16");
   return isNaN(fs) ? 16 : fs;
 }
 
@@ -78,7 +78,7 @@ export function syncSliderToCurrent(): void {
     return;
   }
 
-  const v = getComputedStyle(CONTENT_DOC.documentElement).getPropertyValue("--lia-tff-font").trim();
+  const v = CONTENT_WIN.getComputedStyle(CONTENT_DOC.documentElement).getPropertyValue("--lia-tff-font").trim();
   const n = parseInt(v, 10);
   if (isFinite(n)) slider.value = String(clamp(n, min, max));
 }

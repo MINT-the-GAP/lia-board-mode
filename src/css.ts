@@ -29,9 +29,11 @@ function getLiaAccentColor(doc: Document | null): string | null {
     const d = doc || document;
     const body = d.body || d.documentElement;
 
+    const win = d.defaultView as Window;
+
     const existing = d.querySelector(".lia-btn") as HTMLElement | null;
     if (existing) {
-      const bg = getComputedStyle(existing).backgroundColor;
+      const bg = win.getComputedStyle(existing).backgroundColor;
       if (bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") return bg;
     }
 
@@ -45,7 +47,7 @@ function getLiaAccentColor(doc: Document | null): string | null {
     probe.style.visibility = "hidden";
     body.appendChild(probe);
 
-    const bg = getComputedStyle(probe).backgroundColor;
+    const bg = win.getComputedStyle(probe).backgroundColor;
     probe.remove();
 
     if (bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") return bg;
