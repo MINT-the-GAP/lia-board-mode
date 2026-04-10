@@ -75,7 +75,7 @@ html[data-lia-mode="slides"] main{
   position: absolute !important;
   width: 34px !important;
   height: 34px !important;
-  display: inline-flex !important;
+  display: none;
   align-items: center !important;
   justify-content: center !important;
   border: 0 !important;
