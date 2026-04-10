@@ -127,7 +127,11 @@ export function positionOverlayButton(): void {
   btn.style.top = `${Math.round(top)}px`;
 }
 
+let panelSize: { w: number; h: number } | null = null;
+
 function measurePanel(panel: HTMLElement): { w: number; h: number } {
+  if (panelSize) return panelSize;
+
   const prevD = panel.style.display;
   const prevV = panel.style.visibility;
   const prevL = panel.style.left;
@@ -146,7 +150,8 @@ function measurePanel(panel: HTMLElement): { w: number; h: number } {
   panel.style.left = prevL;
   panel.style.top = prevT;
 
-  return { w, h };
+  panelSize = { w, h };
+  return panelSize;
 }
 
 export function positionPanel(): void {
