@@ -83,5 +83,5 @@ import { initModeOnly } from "./modeOnly";
   // =========================================================
   initEvents(tick);
   tick();
-  initModeOnly();
+  initModeOnly(() => I.lastMode ?? "unknown");
 })();

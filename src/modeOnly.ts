@@ -153,7 +153,7 @@ function collectDocsSameOrigin(): Document[] {
   return Array.from(docs);
 }
 
-function applyModeOnly(): void {
+function applyModeOnly(mode: string): void {
   const docs = collectDocsSameOrigin();
 
   const sectionDocs = docs.filter(d => {
@@ -166,29 +166,33 @@ function applyModeOnly(): void {
     ensureModeStyle(d);
   }
 
-  let mode: string | null = null;
-  for (const d of docs) {
-    mode = detectModeForDoc(d);
-    if (mode) break;
+  // Fall back to DOM-based detection only when the caller has no authoritative mode.
+  let resolved = mode;
+  if (resolved === "unknown") {
+    for (const d of docs) {
+      const m = detectModeForDoc(d);
+      if (m) { resolved = m; break; }
+    }
   }
-  if (!mode) mode = "unknown";
 
-  const valid = (mode === "slides" || mode === "presentation" || mode === "textbook");
+  const valid = (resolved === "slides" || resolved === "presentation" || resolved === "textbook");
   for (const d of targetSectionDocs) {
     try {
-      if (valid) d.documentElement.setAttribute("data-lia-mode", mode!);
+      if (valid) d.documentElement.setAttribute("data-lia-mode", resolved);
       else d.documentElement.removeAttribute("data-lia-mode");
     } catch (e) { }
   }
 }
 
-export function initModeOnly(): void {
-  applyModeOnly();
-  setTimeout(applyModeOnly, 50);
-  setTimeout(applyModeOnly, 250);
-  setTimeout(applyModeOnly, 1000);
+export function initModeOnly(getMode: () => string): void {
+  const run = () => applyModeOnly(getMode());
 
-  document.addEventListener("click", () => setTimeout(applyModeOnly, 0), true);
-  window.addEventListener("hashchange", applyModeOnly, true);
-  window.addEventListener("popstate", applyModeOnly, true);
+  run();
+  setTimeout(run, 50);
+  setTimeout(run, 250);
+  setTimeout(run, 1000);
+
+  document.addEventListener("click", () => setTimeout(run, 0), true);
+  window.addEventListener("hashchange", run, true);
+  window.addEventListener("popstate", run, true);
 }
