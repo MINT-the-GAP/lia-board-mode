@@ -21,7 +21,10 @@ export function setVar(doc: Document, k: string, v: string): void {
   try { doc.documentElement.style.setProperty(k, v); } catch (e) { }
 }
 
-export function getLiaAccentColor(doc: Document | null): string | null {
+let cachedAccent: string | null = null;
+let cachedAccentMode: string | null = null;
+
+function getLiaAccentColor(doc: Document | null): string | null {
   try {
     const d = doc || document;
     const body = d.body || d.documentElement;
@@ -50,11 +53,20 @@ export function getLiaAccentColor(doc: Document | null): string | null {
   return null;
 }
 
-export function syncAccent(): void {
+export function syncAccent(mode: string): void {
+  if (mode === cachedAccentMode && cachedAccent) {
+    setVar(ROOT_DOC, "--lia-tff-accent", cachedAccent);
+    setVar(CONTENT_DOC, "--lia-tff-accent", cachedAccent);
+    return;
+  }
+
   const acc =
     getLiaAccentColor(ROOT_DOC) ||
     getLiaAccentColor(CONTENT_DOC) ||
     "rgb(11,95,255)";
+
+  cachedAccent = acc;
+  cachedAccentMode = mode;
 
   setVar(ROOT_DOC, "--lia-tff-accent", acc);
   setVar(CONTENT_DOC, "--lia-tff-accent", acc);

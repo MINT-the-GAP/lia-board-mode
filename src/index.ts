@@ -31,7 +31,7 @@ import { initModeOnly } from "./modeOnly";
         const mode = detectMode();
         applyModeAttr(mode);
 
-        syncAccent();
+        syncAccent(mode);
 
         ensureUI();
         syncNightlyMiniMode();
