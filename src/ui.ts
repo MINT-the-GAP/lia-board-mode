@@ -25,6 +25,7 @@ export function ensureUI(): void {
     btn.id = BTN_ID;
     (btn as HTMLButtonElement).type = "button";
     btn.setAttribute("aria-label", "Font size");
+    btn.setAttribute("title", "Change Font Size");
     btn.innerHTML = `<span class="tffA-small">A</span><span class="tffA-big">A</span>`;
     overlay.appendChild(btn);
   }

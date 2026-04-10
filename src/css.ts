@@ -277,14 +277,13 @@ body.lia-tff-nightly-mini #${BTN_ID} .tffA-big{
 #${PANEL_ID}{
   position: fixed !important;
   z-index: 99999979 !important;
-  width: 240px !important;
-  padding: 12px 14px !important;
+  width: 220px !important;
+  padding: 14px 16px 16px !important;
   display: none !important;
-  border-radius: 14px !important;
-  border: 1px solid color-mix(in srgb, currentColor 18%, transparent) !important;
-  background: color-mix(in srgb, rgba(0, 0, 0, 0.65) 65%, transparent) !important;
-  backdrop-filter: blur(8px);
-  box-shadow: 0 16px 42px rgba(0,0,0,.18) !important;
+  border-radius: 12px !important;
+  border: 2px solid var(--lia-tff-accent) !important;
+  background: #fff !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,.12) !important;
 }
 
 body.lia-tff-panel-open #${PANEL_ID}{
@@ -292,16 +291,19 @@ body.lia-tff-panel-open #${PANEL_ID}{
 }
 
 #${TITLE_ID}{
-  font-size: 1.15rem !important;
-  font-weight: 800 !important;
-  margin: 0 0 10px 0 !important;
-  letter-spacing: .2px !important;
+  font-size: 0.78rem !important;
+  font-weight: 600 !important;
+  letter-spacing: .08em !important;
+  text-transform: uppercase !important;
+  color: var(--lia-tff-accent) !important;
+  margin: 0 0 12px 0 !important;
 }
 
 #${PANEL_ID} input[type="range"]{
   width: 100% !important;
   margin: 0 !important;
   accent-color: var(--lia-tff-accent) !important;
+  cursor: pointer !important;
 }
 
 @media (max-width: 680px){
