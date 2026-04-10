@@ -88,14 +88,25 @@ export function wireOnce(): void {
 }
 
 export function initEvents(tickFn: () => void): void {
+  // Exclude attributes we write ourselves to avoid a feedback loop.
+  const IGNORED_ATTRS = new Set(["style", "data-lia-mode"]);
+
+  function makeObserver(): MutationObserver {
+    return new MutationObserver((records) => {
+      for (const r of records) {
+        if (r.type === "attributes" && r.attributeName && IGNORED_ATTRS.has(r.attributeName)) continue;
+        tickFn();
+        return;
+      }
+    });
+  }
+
   try {
-    const mo = new MutationObserver(() => tickFn());
-    mo.observe(ROOT_DOC.documentElement, { childList: true, subtree: true, attributes: true });
+    makeObserver().observe(ROOT_DOC.documentElement, { childList: true, subtree: true, attributes: true });
   } catch (e) { }
 
   try {
-    const mo2 = new MutationObserver(() => tickFn());
-    mo2.observe(CONTENT_DOC.documentElement, { childList: true, subtree: true, attributes: true });
+    makeObserver().observe(CONTENT_DOC.documentElement, { childList: true, subtree: true, attributes: true });
   } catch (e) { }
 
   ROOT_WIN.addEventListener("storage", function (e) {
