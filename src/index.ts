@@ -6,7 +6,7 @@ import { ensureContentCSS, ensureRootCSS, syncAccent } from "./css";
 import { applyFontLogic, syncSliderToCurrent } from "./font";
 import { syncNightlyMiniMode, toolbarSignature } from "./toolbar";
 import {
-  ensureUI, placeButtonInCorrectHost,
+  ensureUI,
   setPresentationOnlyVisibility, positionOverlayButton, positionPanel
 } from "./ui";
 import { burstRepositionThrottled, wireOnce, initEvents } from "./events";
@@ -35,7 +35,6 @@ import { initModeOnly } from "./modeOnly";
 
         ensureUI();
         syncNightlyMiniMode();
-        placeButtonInCorrectHost();
         const show = setPresentationOnlyVisibility(mode);
 
         const showChanged = (I.lastShow === null) ? true : (show !== I.lastShow);
