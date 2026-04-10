@@ -196,18 +196,6 @@ export function getHighlightRect(): ({ left: number; top: number; right: number;
   };
 }
 
-// Dead code — kept for reference but never called
-export function isTOCOpen(): boolean {
-  const toc = ROOT_DOC.getElementById("lia-toc");
-  if (!toc) return false;
-  return toc.classList.contains("lia-toc--open");
-}
-
-// Dead code — superseded by getTFFTOCButtonRect
-export function getTOCButtonRect(): DOMRect | null {
-  return getVisibleRect(ROOT_DOC.getElementById("lia-btn-toc"));
-}
-
 export function getToolbarBandRect(): DOMRect | null {
   const leftC = getToolbarLeftContainer();
   const leftR = getVisibleRect(leftC);

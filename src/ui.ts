@@ -100,9 +100,8 @@ export function positionOverlayButton(): void {
     const tocRect = getTFFTOCButtonRect();
     if (tocRect) {
       const stackGap = 6;
-      const stackIndex = 0;
       left = tocRect.left + (tocRect.width - bw) / 2;
-      top = tocRect.bottom + stackGap + stackIndex * 28;
+      top = tocRect.bottom + stackGap;
     }
   } else {
     const dock = getDockTarget();
