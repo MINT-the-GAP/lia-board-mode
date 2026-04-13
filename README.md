@@ -16,19 +16,19 @@ script:   ./dist/index.js
 The board-mode plugin does two things: it expands the content area to (almost) full screen width in presentation and slides mode, and it adds a font-size slider button in the toolbar. It also lets you show different content blocks depending on the current view mode.
 
 __Try it on LiaScript:__
-https://liascript.github.io/course/?https://raw.githubusercontent.com/MINT-the-GAP/liascript-board-mode/main/README.md
+https://liascript.github.io/course/?https://raw.githubusercontent.com/MINT-the-GAP/lia-board-mode/main/README.md
 
 __See the project on GitHub:__
-https://github.com/MINT-the-GAP/liascript-board-mode
+https://github.com/MINT-the-GAP/lia-board-mode
 
            {{1}}
 1. Load the macros via
 
-   `import: https://raw.githubusercontent.com/MINT-the-GAP/liascript-board-mode/main/README.md`
+   `import: https://raw.githubusercontent.com/MINT-the-GAP/lia-board-mode/main/README.md`
 
    or pin to a specific version:
 
-   `import: https://raw.githubusercontent.com/MINT-the-GAP/liascript-board-mode/0.0.1/README.md`
+   `import: https://raw.githubusercontent.com/MINT-the-GAP/lia-board-mode/0.0.1/README.md`
 
 2. Copy the definitions into your project
 
@@ -85,5 +85,5 @@ This is only visible in textbook mode.
 If you prefer not to use `import:`, copy the following block directly into the header of your LiaScript document.
 
 ``` markdown
-script:   https://cdn.jsdelivr.net/gh/MINT-the-GAP/liascript-board-mode@0.0.1/dist/index.js
+script:   https://cdn.jsdelivr.net/gh/MINT-the-GAP/lia-board-mode@0.0.1/dist/index.js
 ```
