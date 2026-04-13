@@ -10,7 +10,7 @@ import {
   setPresentationOnlyVisibility, positionOverlayButton, positionPanel
 } from "./ui";
 import { burstRepositionThrottled, wireOnce, initEvents } from "./events";
-import { initModeOnly } from "./modeOnly";
+import { initModeOnly, applyModeOnlyNow } from "./modeOnly";
 
 (function () {
   if (!initInstance()) return;
@@ -54,6 +54,7 @@ import { initModeOnly } from "./modeOnly";
 
         if (modeOrSettingsChanged) {
           applyFontLogic(mode);
+          applyModeOnlyNow(mode);
           I.lastMode = mode;
           I.lastSettingsRaw = settingsRaw;
         }

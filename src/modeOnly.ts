@@ -187,12 +187,14 @@ function applyModeOnly(mode: string): void {
 export function initModeOnly(getMode: () => string): void {
   const run = () => applyModeOnly(getMode());
 
+  // Run a few times at startup to catch iframes that load after the plugin.
   run();
   setTimeout(run, 50);
   setTimeout(run, 250);
   setTimeout(run, 1000);
+}
 
-  document.addEventListener("click", () => setTimeout(run, 0), true);
-  window.addEventListener("hashchange", run, true);
-  window.addEventListener("popstate", run, true);
+// Called by tick() when mode changes — keeps modeOnly in sync without its own listeners.
+export function applyModeOnlyNow(mode: string): void {
+  applyModeOnly(mode);
 }
