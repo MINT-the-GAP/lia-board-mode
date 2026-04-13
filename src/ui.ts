@@ -11,7 +11,7 @@ import {
   getDockTarget, getTFFTOCButtonRect
 } from "./toolbar";
 
-export function ensureUI(): void {
+export function ensureUI(onCreated?: () => void): void {
   let overlay = ROOT_DOC.getElementById(OVERLAY_ID);
   if (!overlay) {
     overlay = ROOT_DOC.createElement("div");
@@ -30,6 +30,7 @@ export function ensureUI(): void {
     overlay.appendChild(btn);
   }
 
+  let created = false;
   let panel = ROOT_DOC.getElementById(PANEL_ID);
   if (!panel) {
     panel = ROOT_DOC.createElement("div");
@@ -38,7 +39,10 @@ export function ensureUI(): void {
       `<div id="${TITLE_ID}">Font size</div>` +
       `<input id="${SLIDER_ID}" type="range" min="14" max="48" step="1" value="24" aria-label="Font size" />`;
     ROOT_DOC.body.appendChild(panel);
+    created = true;
   }
+
+  if (created && onCreated) onCreated();
 }
 
 export function placeButtonInCorrectHost(): void {

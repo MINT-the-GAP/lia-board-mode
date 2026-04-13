@@ -33,7 +33,7 @@ import { initModeOnly } from "./modeOnly";
 
         syncAccent(mode);
 
-        ensureUI();
+        ensureUI(wireOnce);
         syncNightlyMiniMode();
         const show = setPresentationOnlyVisibility(mode);
 
@@ -67,8 +67,6 @@ import { initModeOnly } from "./modeOnly";
 
         syncSliderToCurrent();
         if (show) positionPanel();
-
-        wireOnce();
 
       } finally {
         I.ticking = false;

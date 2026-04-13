@@ -2,6 +2,7 @@
 author:   MINT-the-GAP
 version:  0.0.1
 language: en
+edit: true
 narrator: US English Female
 comment:  LiaScript board-mode plugin — full-width presentation layout with font-size slider and mode-conditional content blocks.
 

@@ -37,54 +37,44 @@ export function burstRepositionThrottled(): void {
   scheduleRepositionBurst();
 }
 
-const wiredElements = new WeakSet<Element>();
-
 export function wireOnce(): void {
   const btn = ROOT_DOC.getElementById(BTN_ID);
   const slider = ROOT_DOC.getElementById(SLIDER_ID) as HTMLInputElement | null;
   if (!btn || !slider) return;
 
-  if (!wiredElements.has(btn)) {
-    wiredElements.add(btn);
+  btn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    ROOT_DOC.body.classList.toggle("lia-tff-panel-open");
+    positionPanel();
+  });
 
-    btn.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      ROOT_DOC.body.classList.toggle("lia-tff-panel-open");
-      positionPanel();
-    });
+  ROOT_DOC.addEventListener("click", (e) => {
+    if (!ROOT_DOC.body.classList.contains("lia-tff-panel-open")) return;
+    const t = e.target as Element | null;
+    if (t && t.closest && (t.closest("#" + PANEL_ID) || t.closest("#" + BTN_ID))) return;
+    ROOT_DOC.body.classList.remove("lia-tff-panel-open");
+  }, true);
 
-    ROOT_DOC.addEventListener("click", (e) => {
-      if (!ROOT_DOC.body.classList.contains("lia-tff-panel-open")) return;
-      const t = e.target as Element | null;
-      if (t && t.closest && (t.closest("#" + PANEL_ID) || t.closest("#" + BTN_ID))) return;
+  ROOT_DOC.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
       ROOT_DOC.body.classList.remove("lia-tff-panel-open");
-    }, true);
-
-    ROOT_DOC.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") {
-        ROOT_DOC.body.classList.remove("lia-tff-panel-open");
-      }
-    });
-
-    ROOT_WIN.addEventListener("resize", () => { positionOverlayButton(); positionPanel(); });
-    if (ROOT_WIN.visualViewport) {
-      ROOT_WIN.visualViewport.addEventListener("resize", () => { positionOverlayButton(); positionPanel(); });
-      ROOT_WIN.visualViewport.addEventListener("scroll", () => { positionOverlayButton(); positionPanel(); });
     }
+  });
+
+  ROOT_WIN.addEventListener("resize", () => { positionOverlayButton(); positionPanel(); });
+  if (ROOT_WIN.visualViewport) {
+    ROOT_WIN.visualViewport.addEventListener("resize", () => { positionOverlayButton(); positionPanel(); });
+    ROOT_WIN.visualViewport.addEventListener("scroll", () => { positionOverlayButton(); positionPanel(); });
   }
 
-  if (!wiredElements.has(slider)) {
-    wiredElements.add(slider);
-
-    slider.addEventListener("input", () => {
-      const min = parseInt(slider.min || "14", 10);
-      const max = parseInt(slider.max || "48", 10);
-      const v = clamp(parseInt(slider.value || "24", 10), min, max);
-      try { localStorage.setItem(FONT_KEY, String(v)); } catch (e) { }
-      setPresFontPx(v);
-    });
-  }
+  slider.addEventListener("input", () => {
+    const min = parseInt(slider.min || "14", 10);
+    const max = parseInt(slider.max || "48", 10);
+    const v = clamp(parseInt(slider.value || "24", 10), min, max);
+    try { localStorage.setItem(FONT_KEY, String(v)); } catch (e) { }
+    setPresFontPx(v);
+  });
 }
 
 export function initEvents(tickFn: () => void): void {
