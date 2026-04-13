@@ -2,6 +2,7 @@
 
 import { ROOT_WIN, ROOT_DOC, CONTENT_DOC, SETTINGS_KEY, FONT_KEY, PANEL_ID, BTN_ID, SLIDER_ID, I, clearPosTimers } from "./state";
 import { positionOverlayButton, positionPanel } from "./ui";
+import { getToolbarHeader } from "./toolbar";
 import { setPresFontPx } from "./font";
 import { clamp } from "./state";
 
@@ -12,22 +13,10 @@ function runPositionNow(): void {
 
 export function scheduleRepositionBurst(): void {
   clearPosTimers();
-
-  runPositionNow();
   ROOT_WIN.requestAnimationFrame(() => {
+    runPositionNow();
     ROOT_WIN.requestAnimationFrame(() => runPositionNow());
   });
-
-  const delays = [40, 120, 260, 520];
-  for (const ms of delays) {
-    I.posTimers.push(ROOT_WIN.setTimeout(() => { runPositionNow(); }, ms));
-  }
-
-  try {
-    if (ROOT_DOC.fonts && ROOT_DOC.fonts.ready) {
-      ROOT_DOC.fonts.ready.then(() => runPositionNow());
-    }
-  } catch (e) { }
 }
 
 export function burstRepositionThrottled(): void {
@@ -35,6 +24,24 @@ export function burstRepositionThrottled(): void {
   if (now - (I.lastBurstAt || 0) < 120) return;
   I.lastBurstAt = now;
   scheduleRepositionBurst();
+}
+
+function initToolbarResizeObserver(): void {
+  if (typeof ResizeObserver === "undefined") return;
+  try {
+    const ro = new ResizeObserver(() => runPositionNow());
+    const toolbar = getToolbarHeader();
+    if (toolbar) {
+      ro.observe(toolbar);
+    } else {
+      // Toolbar not in DOM yet — wait for it
+      const mo = new MutationObserver(() => {
+        const t = getToolbarHeader();
+        if (t) { ro.observe(t); mo.disconnect(); }
+      });
+      mo.observe(ROOT_DOC.documentElement, { childList: true, subtree: true });
+    }
+  } catch (e) { }
 }
 
 export function wireOnce(): void {
@@ -105,4 +112,6 @@ export function initEvents(tickFn: () => void): void {
   });
 
   ROOT_WIN.setInterval(() => { if (I.__alive) tickFn(); }, 5000);
+
+  initToolbarResizeObserver();
 }
