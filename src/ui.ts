@@ -10,6 +10,7 @@ import {
   shouldUseTFFNightlyStackDock, shouldUseInlineStripDock, ensureInlineDockSlot,
   getDockTarget, getTFFTOCButtonRect
 } from "./toolbar";
+import { detectLanguage, getFontSizeLabel } from "./i18n";
 
 export function ensureUI(onCreated?: () => void): void {
   let overlay = ROOT_DOC.getElementById(OVERLAY_ID);
@@ -24,8 +25,9 @@ export function ensureUI(onCreated?: () => void): void {
     btn = ROOT_DOC.createElement("button");
     btn.id = BTN_ID;
     (btn as HTMLButtonElement).type = "button";
-    btn.setAttribute("aria-label", "Font size");
-    btn.setAttribute("title", "Change Font Size");
+    const initialLabel = getFontSizeLabel();
+    btn.setAttribute("aria-label", initialLabel);
+    btn.setAttribute("title", initialLabel);
     btn.innerHTML = `<span class="tffA-small">A</span><span class="tffA-big">A</span>`;
     overlay.appendChild(btn);
   }
@@ -35,9 +37,10 @@ export function ensureUI(onCreated?: () => void): void {
   if (!panel) {
     panel = ROOT_DOC.createElement("div");
     panel.id = PANEL_ID;
+    const initialLabel = getFontSizeLabel();
     panel.innerHTML =
-      `<div id="${TITLE_ID}">Font size</div>` +
-      `<input id="${SLIDER_ID}" type="range" min="14" max="48" step="1" value="24" aria-label="Font size" />`;
+      `<div id="${TITLE_ID}">${initialLabel}</div>` +
+      `<input id="${SLIDER_ID}" type="range" min="14" max="48" step="1" value="24" aria-label="${initialLabel}" />`;
     ROOT_DOC.body.appendChild(panel);
     created = true;
   }
@@ -220,4 +223,37 @@ export function setPresentationOnlyVisibility(mode: string): boolean {
   }
 
   return show;
+}
+
+// =========================================================
+// i18n label sync
+// =========================================================
+
+let cachedLang: string | null = null;
+
+/**
+ * Updates the "Font Size" panel title, button aria-label, and slider
+ * aria-label whenever the course language changes.
+ * Only touches the DOM when the language has actually changed.
+ */
+export function syncFontSizeLabel(): void {
+  try {
+    const lang = detectLanguage();
+    if (lang === cachedLang) return;
+    cachedLang = lang;
+
+    const label = getFontSizeLabel();
+
+    const title = ROOT_DOC.getElementById(TITLE_ID);
+    if (title) title.textContent = label;
+
+    const btn = ROOT_DOC.getElementById(BTN_ID);
+    if (btn) {
+      btn.setAttribute("aria-label", label);
+      btn.setAttribute("title", label);
+    }
+
+    const slider = ROOT_DOC.getElementById(SLIDER_ID);
+    if (slider) slider.setAttribute("aria-label", label);
+  } catch (e) { }
 }

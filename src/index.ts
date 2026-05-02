@@ -2,12 +2,13 @@
 
 import { initInstance, I, ROOT_WIN } from "./state";
 import { detectMode, applyModeAttr, safeGetSettingsRaw } from "./mode";
-import { ensureContentCSS, ensureRootCSS, syncAccent } from "./css";
+import { ensureContentCSS, ensureRootCSS, syncAccent, syncDarkMode } from "./css";
 import { applyFontLogic, syncSliderToCurrent } from "./font";
 import { syncNightlyMiniMode, toolbarSignature } from "./toolbar";
 import {
   ensureUI,
-  setPresentationOnlyVisibility, positionOverlayButton, positionPanel
+  setPresentationOnlyVisibility, positionOverlayButton, positionPanel,
+  syncFontSizeLabel
 } from "./ui";
 import { burstRepositionThrottled, wireOnce, initEvents } from "./events";
 import { initModeOnly, applyModeOnlyNow } from "./modeOnly";
@@ -32,6 +33,7 @@ import { initModeOnly, applyModeOnlyNow } from "./modeOnly";
         applyModeAttr(mode);
 
         syncAccent(mode);
+        syncDarkMode();
 
         ensureUI(wireOnce);
         syncNightlyMiniMode();
@@ -67,6 +69,7 @@ import { initModeOnly, applyModeOnlyNow } from "./modeOnly";
         }
 
         syncSliderToCurrent();
+        syncFontSizeLabel();
         if (show) positionPanel();
 
       } finally {

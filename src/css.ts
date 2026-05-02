@@ -1,7 +1,7 @@
 // CSS injection helpers, theme accent sync, and the CONTENT/ROOT stylesheet constants.
 
 import {
-  ROOT_DOC, CONTENT_DOC,
+  ROOT_WIN, ROOT_DOC, CONTENT_DOC,
   OVERLAY_ID, BTN_ID, PANEL_ID, TITLE_ID, INLINE_SLOT_ID
 } from "./state";
 
@@ -282,17 +282,30 @@ body.lia-tff-nightly-mini #${BTN_ID} .tffA-big{
   display: none !important;
   border-radius: 12px !important;
   border: 2px solid var(--lia-tff-accent) !important;
-  background: #fff !important;
-  box-shadow: 0 4px 20px rgba(0,0,0,.12) !important;
+  background: var(--tff-panel-bg, #fff) !important;
+  color: var(--tff-panel-fg, #111) !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,.15) !important;
 }
 
 body.lia-tff-panel-open #${PANEL_ID}{
   display: block !important;
 }
 
+@media (prefers-color-scheme: dark){
+  #${PANEL_ID}{
+    --tff-panel-bg: #252830;
+    --tff-panel-fg: #e4e6eb;
+  }
+}
+
+body.lia-tff-dark #${PANEL_ID}{
+  --tff-panel-bg: #252830;
+  --tff-panel-fg: #e4e6eb;
+}
+
 #${TITLE_ID}{
-  font-size: 0.78rem !important;
-  font-weight: 600 !important;
+  font-size: 1.5rem !important;
+  font-weight: 700 !important;
   letter-spacing: .08em !important;
   text-transform: uppercase !important;
   color: var(--lia-tff-accent) !important;
@@ -314,4 +327,62 @@ body.lia-tff-panel-open #${PANEL_ID}{
 
 export function ensureRootCSS(): void {
   ensureStyle(ROOT_DOC, ROOT_STYLE_ID, ROOT_CSS);
+}
+
+// =========================================================
+// Dark-mode detection + class sync
+// =========================================================
+
+let cachedDark: boolean | null = null;
+
+function detectDarkMode(): boolean {
+  // 1. Check prefers-color-scheme media query (system preference)
+  try {
+    if (ROOT_WIN.matchMedia && ROOT_WIN.matchMedia("(prefers-color-scheme: dark)").matches) {
+      return true;
+    }
+  } catch (e) { }
+
+  // 2. Check LiaScript / Bootstrap / generic dark-mode attributes on ROOT_DOC
+  try {
+    const html = ROOT_DOC.documentElement;
+    const body = ROOT_DOC.body;
+    if (
+      html.getAttribute("data-bs-theme") === "dark" ||
+      html.getAttribute("data-theme") === "dark" ||
+      html.classList.contains("dark") ||
+      html.classList.contains("lia-theme-dark") ||
+      body.getAttribute("data-bs-theme") === "dark" ||
+      body.getAttribute("data-theme") === "dark" ||
+      body.classList.contains("dark") ||
+      body.classList.contains("lia-theme-dark")
+    ) return true;
+  } catch (e) { }
+
+  // 3. Luminosity fallback: inspect ROOT_DOC body background color
+  try {
+    const bg = ROOT_WIN.getComputedStyle(ROOT_DOC.body).backgroundColor;
+    const m = bg.match(/\d+/g);
+    if (m && m.length >= 3) {
+      const lum = (0.299 * +m[0] + 0.587 * +m[1] + 0.114 * +m[2]) / 255;
+      if (lum < 0.45) return true;
+    }
+  } catch (e) { }
+
+  return false;
+}
+
+/**
+ * Detects whether dark mode is active and toggles the helper class
+ * `lia-tff-dark` on ROOT_DOC.body so that CSS dark-mode overrides take effect.
+ * Only touches the DOM when the state actually changes.
+ */
+export function syncDarkMode(): void {
+  try {
+    if (!ROOT_DOC.body) return;
+    const dark = detectDarkMode();
+    if (dark === cachedDark) return;
+    cachedDark = dark;
+    ROOT_DOC.body.classList.toggle("lia-tff-dark", dark);
+  } catch (e) { }
 }
