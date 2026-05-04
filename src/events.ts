@@ -113,5 +113,9 @@ export function initEvents(tickFn: () => void): void {
 
   ROOT_WIN.setInterval(() => { if (I.__alive) tickFn(); }, 5000);
 
+  try {
+    ROOT_WIN.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => tickFn());
+  } catch (e) { }
+
   initToolbarResizeObserver();
 }

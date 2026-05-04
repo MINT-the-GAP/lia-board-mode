@@ -291,13 +291,6 @@ body.lia-tff-panel-open #${PANEL_ID}{
   display: block !important;
 }
 
-@media (prefers-color-scheme: dark){
-  #${PANEL_ID}{
-    --tff-panel-bg: #252830;
-    --tff-panel-fg: #e4e6eb;
-  }
-}
-
 body.lia-tff-dark #${PANEL_ID}{
   --tff-panel-bg: #252830;
   --tff-panel-fg: #e4e6eb;
@@ -306,8 +299,6 @@ body.lia-tff-dark #${PANEL_ID}{
 #${TITLE_ID}{
   font-size: 1.5rem !important;
   font-weight: 700 !important;
-  letter-spacing: .08em !important;
-  text-transform: uppercase !important;
   color: var(--lia-tff-accent) !important;
   margin: 0 0 12px 0 !important;
 }
@@ -336,18 +327,20 @@ export function ensureRootCSS(): void {
 let cachedDark: boolean | null = null;
 
 function detectDarkMode(): boolean {
-  // 1. Check prefers-color-scheme media query (system preference)
-  try {
-    if (ROOT_WIN.matchMedia && ROOT_WIN.matchMedia("(prefers-color-scheme: dark)").matches) {
-      return true;
-    }
-  } catch (e) { }
-
-  // 2. Check LiaScript / Bootstrap / generic dark-mode attributes on ROOT_DOC
+  // 1. Explicit app-level theme attributes — highest priority, overrides system pref
   try {
     const html = ROOT_DOC.documentElement;
     const body = ROOT_DOC.body;
+    // LiaScript explicit light variant overrides OS preference
     if (
+      html.classList.contains("lia-variant-light") ||
+      html.getAttribute("data-bs-theme") === "light" ||
+      html.getAttribute("data-theme") === "light" ||
+      body.getAttribute("data-bs-theme") === "light" ||
+      body.getAttribute("data-theme") === "light"
+    ) return false;
+    if (
+      html.classList.contains("lia-variant-dark") ||
       html.getAttribute("data-bs-theme") === "dark" ||
       html.getAttribute("data-theme") === "dark" ||
       html.classList.contains("dark") ||
@@ -359,13 +352,22 @@ function detectDarkMode(): boolean {
     ) return true;
   } catch (e) { }
 
-  // 3. Luminosity fallback: inspect ROOT_DOC body background color
+  // 2. System preference
+  try {
+    if (ROOT_WIN.matchMedia && ROOT_WIN.matchMedia("(prefers-color-scheme: dark)").matches) {
+      return true;
+    }
+  } catch (e) { }
+
+  // 3. Luminosity fallback: skip transparent backgrounds (rgba(0,0,0,0) reads as black but isn't dark)
   try {
     const bg = ROOT_WIN.getComputedStyle(ROOT_DOC.body).backgroundColor;
-    const m = bg.match(/\d+/g);
-    if (m && m.length >= 3) {
-      const lum = (0.299 * +m[0] + 0.587 * +m[1] + 0.114 * +m[2]) / 255;
-      if (lum < 0.45) return true;
+    if (bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") {
+      const m = bg.match(/\d+/g);
+      if (m && m.length >= 3) {
+        const lum = (0.299 * +m[0] + 0.587 * +m[1] + 0.114 * +m[2]) / 255;
+        if (lum < 0.45) return true;
+      }
     }
   } catch (e) { }
 
