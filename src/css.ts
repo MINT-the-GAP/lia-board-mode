@@ -1,7 +1,7 @@
 // CSS injection helpers, theme accent sync, and the CONTENT/ROOT stylesheet constants.
 
 import {
-  ROOT_WIN, ROOT_DOC, CONTENT_DOC,
+  ROOT_WIN, ROOT_DOC, CONTENT_WIN, CONTENT_DOC, clamp,
   OVERLAY_ID, BTN_ID, PANEL_ID, TITLE_ID, INLINE_SLOT_ID
 } from "./state";
 
@@ -85,6 +85,8 @@ const CONTENT_CSS = `
   --lia-tff-pad-left: 25px;
   --lia-tff-pad-right: 25px;
   --lia-tff-maxw: 98.5vw;
+  --lia-tff-slide-top-preview: 5vh;
+  --lia-tff-slide-exit-space: 81vh;
   --lia-tff-font: unset;
 }
 
@@ -94,6 +96,8 @@ html[data-lia-mode="presentation"]{
   --lia-tff-pad-left: 25px;
   --lia-tff-pad-right: 25px;
   --lia-tff-maxw: 98.5vw;
+  --lia-tff-slide-top-preview: 5vh;
+  --lia-tff-slide-exit-space: 81vh;
 }
 
 html[data-lia-mode="slides"]{
@@ -102,6 +106,8 @@ html[data-lia-mode="slides"]{
   --lia-tff-pad-left: 25px;
   --lia-tff-pad-right: 25px;
   --lia-tff-maxw: 98.5vw;
+  --lia-tff-slide-top-preview: 5vh;
+  --lia-tff-slide-exit-space: 81vh;
 }
 
 html[data-lia-mode="presentation"] body,
@@ -135,10 +141,156 @@ html[data-lia-mode="presentation"] main,
 html[data-lia-mode="slides"] main{
   font-size: var(--lia-tff-font) !important;
 }
+
+/* Reliable scroll spacer only on real slide content nodes. */
+html[data-lia-mode="presentation"] .lia-slide__container > main.lia-slide__content::after,
+html[data-lia-mode="slides"] .lia-slide__container > main.lia-slide__content::after{
+  content: "";
+  display: block;
+  height: var(--lia-tff-slide-exit-space);
+  pointer-events: none;
+}
 `;
 
 export function ensureContentCSS(): void {
   ensureStyle(CONTENT_DOC, CONTENT_STYLE_ID, CONTENT_CSS);
+}
+
+let lastExitTuneKey: string | null = null;
+let lastExitTuneErrorPx = Number.POSITIVE_INFINITY;
+const LAST_LINE_VISIBLE_FRACTION = 0.40;
+
+function parseLenToPx(v: string, vh: number): number {
+  const s = String(v || "").trim().toLowerCase();
+  if (!s) return 0;
+  if (s.endsWith("px")) {
+    const n = parseFloat(s.slice(0, -2));
+    return isFinite(n) ? n : 0;
+  }
+  if (s.endsWith("vh")) {
+    const n = parseFloat(s.slice(0, -2));
+    return isFinite(n) ? (vh * n / 100) : 0;
+  }
+  const n = parseFloat(s);
+  return isFinite(n) ? n : 0;
+}
+
+function getLastTextLineRect(root: Element): DOMRect | null {
+  const all = Array.from(root.querySelectorAll("*")) as HTMLElement[];
+
+  for (let i = all.length - 1; i >= 0; i--) {
+    const el = all[i];
+    if (!el) continue;
+
+    const txt = (el.textContent || "").trim();
+    if (!txt) continue;
+
+    const cs = CONTENT_WIN.getComputedStyle(el);
+    if (cs.display === "none" || cs.visibility === "hidden") continue;
+
+    try {
+      const range = CONTENT_DOC.createRange();
+      range.selectNodeContents(el);
+      const rects = Array.from(range.getClientRects());
+
+      for (let j = rects.length - 1; j >= 0; j--) {
+        const r = rects[j];
+        if (!r || r.width < 4 || r.height < 2) continue;
+        return r;
+      }
+    } catch (e) { }
+  }
+
+  return null;
+}
+
+/**
+ * Adapts extra slide scroll-space so only ~40% of the last rendered text line
+ * remains visible at max scroll across different responsive LiaScript layouts.
+ */
+export function syncSlideExitSpace(mode: string): void {
+  if (mode !== "presentation" && mode !== "slides") {
+    lastExitTuneKey = null;
+    return;
+  }
+
+  try {
+    const containers = Array.from(CONTENT_DOC.querySelectorAll(".lia-slide__container")) as HTMLElement[];
+    if (!containers.length) return;
+
+    const vpH = ROOT_WIN.innerHeight || 1000;
+    const scored = containers
+      .filter(el => el.clientHeight > 80)
+      .map(el => {
+        const cs = CONTENT_WIN.getComputedStyle(el);
+        const r = el.getBoundingClientRect();
+        const visH = Math.max(0, Math.min(r.bottom, vpH) - Math.max(r.top, 0));
+        const visScore = visH * Math.max(1, r.width);
+        const overflow = Math.max(0, el.scrollHeight - el.clientHeight);
+        const shown = (cs.display !== "none" && cs.visibility !== "hidden") ? 1 : 0;
+        return { el, r, score: shown * (visScore + overflow * 10) };
+      })
+      .sort((a, b) => b.score - a.score);
+
+    const scroller = (scored[0] && scored[0].score > 0)
+      ? scored[0].el
+      : containers
+          .sort((a, b) => (b.scrollHeight - b.clientHeight) - (a.scrollHeight - a.clientHeight))[0];
+
+    if (!scroller) return;
+
+    const content = (scroller.querySelector("main.lia-slide__content") ||
+      CONTENT_DOC.querySelector("main.lia-slide__content") ||
+      CONTENT_DOC.querySelector("main")) as HTMLElement | null;
+    if (!content) return;
+
+    const key = [
+      mode,
+      Math.round(ROOT_WIN.innerWidth),
+      Math.round(ROOT_WIN.innerHeight),
+      Math.round(scroller.clientHeight),
+      Math.round(scroller.scrollHeight),
+      Math.round(scroller.getBoundingClientRect().top),
+      Math.round(content.clientWidth),
+      Math.round(content.scrollHeight)
+    ].join("|");
+    if (key === lastExitTuneKey && lastExitTuneErrorPx <= 0.08) return;
+
+    const oldTop = scroller.scrollTop;
+    let absErr = Number.POSITIVE_INFINITY;
+
+    for (let pass = 0; pass < 3; pass++) {
+      scroller.scrollTop = scroller.scrollHeight;
+
+      const lineRect = getLastTextLineRect(content);
+      if (!lineRect) break;
+
+      const scrollerRect = scroller.getBoundingClientRect();
+      const currentTop = lineRect.top;
+      const targetTop =
+        scrollerRect.top - ((1 - LAST_LINE_VISIBLE_FRACTION) * Math.max(2, lineRect.height));
+
+      const currVar = CONTENT_WIN.getComputedStyle(CONTENT_DOC.documentElement)
+        .getPropertyValue("--lia-tff-slide-exit-space");
+      const currPx = parseLenToPx(currVar, ROOT_WIN.innerHeight);
+
+      const delta = currentTop - targetTop;
+      absErr = Math.abs(delta);
+      if (absErr <= 0.08) break;
+
+      const newPx = clamp(currPx + delta, 0, scroller.clientHeight * 1.25);
+      if (Math.abs(newPx - currPx) < 0.05) break;
+
+      setVar(CONTENT_DOC, "--lia-tff-slide-exit-space", `${newPx.toFixed(2)}px`);
+
+      // Force style/layout flush before next pass.
+      void content.offsetHeight;
+    }
+
+    scroller.scrollTop = oldTop;
+    lastExitTuneKey = key;
+    lastExitTuneErrorPx = absErr;
+  } catch (e) { }
 }
 
 // =========================================================

@@ -2,7 +2,7 @@
 
 import { initInstance, I, ROOT_WIN } from "./state";
 import { detectMode, applyModeAttr, safeGetSettingsRaw } from "./mode";
-import { ensureContentCSS, ensureRootCSS, syncAccent, syncDarkMode } from "./css";
+import { ensureContentCSS, ensureRootCSS, syncAccent, syncDarkMode, syncSlideExitSpace } from "./css";
 import { applyFontLogic, syncSliderToCurrent } from "./font";
 import { syncNightlyMiniMode, toolbarSignature } from "./toolbar";
 import {
@@ -62,6 +62,8 @@ import { initModeOnly, applyModeOnlyNow } from "./modeOnly";
         }
 
         const needBurst = showChanged || sigChanged || modeOrSettingsChanged || I.pendingReposition;
+
+        syncSlideExitSpace(mode);
 
         if (needBurst) {
           I.pendingReposition = false;

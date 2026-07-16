@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Board Mode Scroll Preview Test</title>
+  <style>
+    html, body { margin: 0; padding: 0; }
+    body { font-family: sans-serif; line-height: 1.5; }
+    header#lia-toolbar-nav { position: sticky; top: 0; height: 48px; background: #f2f2f2; z-index: 10; }
+    .lia-header__left { display: flex; align-items: center; height: 48px; gap: 8px; padding: 0 8px; }
+    .lia-btn { background: rgb(11,95,255); color: #fff; border: none; border-radius: 6px; padding: 8px 10px; }
+    main { max-width: 860px; margin: 0 auto; padding: 16px; }
+    p { margin: 0 0 14px 0; }
+  </style>
+</head>
+<body>
+  <header id="lia-toolbar-nav">
+    <div class="lia-header__left">
+      <button id="lia-btn-toc" class="lia-btn" aria-label="Inhaltsverzeichnis">TOC</button>
+    </div>
+  </header>
+  <main>
+    <h1>Scroll-Test</h1>
+    <p>Dieser Test simuliert eine lange Folie im Presentation-Mode.</p>
+    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>
+    <p>Vivamus luctus urna sed urna ultricies ac tempor dui sagittis.</p>
+    <p>In condimentum facilisis porta.</p>
+    <p>Sed nec diam eu diam mattis viverra.</p>
+    <p>Nulla fringilla, orci ac euismod semper.</p>
+    <p>Aenean vehicula vehicula aliquam.</p>
+    <p>Donec posuere vulputate arcu.</p>
+    <p>Phasellus accumsan cursus velit.</p>
+    <p>Vestibulum ante ipsum primis in faucibus orci luctus et.</p>
+    <p>Aliquam lorem ante, dapibus in, viverra quis, feugiat a, tellus.</p>
+    <p>Phasellus viverra nulla ut metus varius laoreet.</p>
+    <p>Quisque rutrum. Aenean imperdiet.</p>
+    <p>Etiam ultricies nisi vel augue.</p>
+    <p>Curabitur ullamcorper ultricies nisi.</p>
+    <p>Nam eget dui. Etiam rhoncus.</p>
+    <p id="lastline">Dies ist die letzte Zeile der Folie.</p>
+  </main>
+
+  <script>
+    localStorage.setItem("settings", JSON.stringify({ mode: "presentation", language: "de" }));
+  </script>
+  <script src="/dist/index.js?t=2"></script>
+</body>
+</html>
