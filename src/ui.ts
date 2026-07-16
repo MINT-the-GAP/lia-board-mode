@@ -3,6 +3,7 @@
 import {
   ROOT_WIN, ROOT_DOC,
   BTN_ID, PANEL_ID, SLIDER_ID, TITLE_ID, OVERLAY_ID, INLINE_SLOT_ID,
+  VOICE_TOGGLE_BTN_ID,
   clamp, clearPosTimers
 } from "./state";
 import {
@@ -11,6 +12,8 @@ import {
   getDockTarget, getTFFTOCButtonRect
 } from "./toolbar";
 import { detectLanguage, getFontSizeLabel } from "./i18n";
+
+let voiceCollapsedPref = true;
 
 export function ensureUI(onCreated?: () => void): void {
   let overlay = ROOT_DOC.getElementById(OVERLAY_ID);
@@ -45,7 +48,81 @@ export function ensureUI(onCreated?: () => void): void {
     created = true;
   }
 
+  let voiceBtn = ROOT_DOC.getElementById(VOICE_TOGGLE_BTN_ID);
+  if (!voiceBtn) {
+    voiceBtn = ROOT_DOC.createElement("button");
+    voiceBtn.id = VOICE_TOGGLE_BTN_ID;
+    (voiceBtn as HTMLButtonElement).type = "button";
+    voiceBtn.setAttribute("aria-label", "Vorleseleiste ausfahren");
+    voiceBtn.setAttribute("title", "Vorleseleiste ausfahren");
+    voiceBtn.textContent = "▲";
+    ROOT_DOC.body.appendChild(voiceBtn);
+    created = true;
+  }
+
   if (created && onCreated) onCreated();
+}
+
+function hasVoiceCollapsedClass(): boolean {
+  return ROOT_DOC.documentElement.classList.contains("lia-tff-voice-collapsed");
+}
+
+function setVoiceCollapsedClass(collapsed: boolean): void {
+  ROOT_DOC.documentElement.classList.toggle("lia-tff-voice-collapsed", collapsed);
+}
+
+function updateVoiceToggleButtonLabel(): void {
+  const btn = ROOT_DOC.getElementById(VOICE_TOGGLE_BTN_ID) as HTMLButtonElement | null;
+  if (!btn) return;
+
+  const collapsed = voiceCollapsedPref;
+  btn.textContent = collapsed ? "▲" : "▼";
+  const label = collapsed ? "Vorleseleiste ausfahren" : "Vorleseleiste einklappen";
+  btn.setAttribute("aria-label", label);
+  btn.setAttribute("title", label);
+}
+
+function isVoiceToggleMode12(mode: string): boolean {
+  if (mode !== "presentation" && mode !== "slides") return false;
+
+  const vv = ROOT_WIN.visualViewport;
+  const w = vv ? vv.width : (ROOT_DOC.documentElement.clientWidth || 0);
+  return w > 1000;
+}
+
+export function toggleVoiceFooterCollapsed(): void {
+  voiceCollapsedPref = !voiceCollapsedPref;
+  setVoiceCollapsedClass(voiceCollapsedPref);
+  updateVoiceToggleButtonLabel();
+}
+
+export function syncVoiceFooterToggle(mode: string): void {
+  const btn = ROOT_DOC.getElementById(VOICE_TOGGLE_BTN_ID) as HTMLButtonElement | null;
+  if (!btn) return;
+
+  btn.onclick = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    toggleVoiceFooterCollapsed();
+  };
+
+  const show = isVoiceToggleMode12(mode);
+  btn.style.display = show ? "flex" : "none";
+
+  if (!show) {
+    setVoiceCollapsedClass(false);
+    updateVoiceToggleButtonLabel();
+    return;
+  }
+
+  // Re-apply persisted preference in case external DOM updates removed the class.
+  if (hasVoiceCollapsedClass() !== voiceCollapsedPref) {
+    setVoiceCollapsedClass(voiceCollapsedPref);
+  }
+
+  updateVoiceToggleButtonLabel();
 }
 
 export function placeButtonInCorrectHost(): void {

@@ -1,6 +1,6 @@
 // Event wiring: button/slider listeners, MutationObserver, storage events, and reposition bursts.
 
-import { ROOT_WIN, ROOT_DOC, CONTENT_DOC, SETTINGS_KEY, FONT_KEY, PANEL_ID, BTN_ID, SLIDER_ID, I, clearPosTimers } from "./state";
+import { ROOT_WIN, ROOT_DOC, CONTENT_DOC, SETTINGS_KEY, FONT_KEY, PANEL_ID, BTN_ID, SLIDER_ID, VOICE_TOGGLE_BTN_ID, I, clearPosTimers } from "./state";
 import { positionOverlayButton, positionPanel } from "./ui";
 import { getToolbarHeader } from "./toolbar";
 import { setPresFontPx } from "./font";
@@ -59,7 +59,7 @@ export function wireOnce(): void {
   ROOT_DOC.addEventListener("click", (e) => {
     if (!ROOT_DOC.body.classList.contains("lia-tff-panel-open")) return;
     const t = e.target as Element | null;
-    if (t && t.closest && (t.closest("#" + PANEL_ID) || t.closest("#" + BTN_ID))) return;
+    if (t && t.closest && (t.closest("#" + PANEL_ID) || t.closest("#" + BTN_ID) || t.closest("#" + VOICE_TOGGLE_BTN_ID))) return;
     ROOT_DOC.body.classList.remove("lia-tff-panel-open");
   }, true);
 

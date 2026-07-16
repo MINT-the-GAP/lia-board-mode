@@ -8,7 +8,7 @@ import { syncNightlyMiniMode, toolbarSignature } from "./toolbar";
 import {
   ensureUI,
   setPresentationOnlyVisibility, positionOverlayButton, positionPanel,
-  syncFontSizeLabel
+  syncFontSizeLabel, syncVoiceFooterToggle
 } from "./ui";
 import { burstRepositionThrottled, wireOnce, initEvents } from "./events";
 import { initModeOnly, applyModeOnlyNow } from "./modeOnly";
@@ -38,6 +38,7 @@ import { initModeOnly, applyModeOnlyNow } from "./modeOnly";
         ensureUI(wireOnce);
         syncNightlyMiniMode();
         const show = setPresentationOnlyVisibility(mode);
+        syncVoiceFooterToggle(mode);
 
         const showChanged = (I.lastShow === null) ? true : (show !== I.lastShow);
         I.lastShow = show;

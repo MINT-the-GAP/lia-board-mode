@@ -110,6 +110,24 @@ html[data-lia-mode="slides"]{
   --lia-tff-slide-exit-space: 81vh;
 }
 
+/* Collapsible TTS footer (mode 1/2): hidden by default until user expands. */
+html.lia-tff-voice-collapsed[data-lia-mode="presentation"] .lia-responsive-voice,
+html.lia-tff-voice-collapsed[data-lia-mode="slides"] .lia-responsive-voice{
+  min-height: 0 !important;
+  max-height: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+}
+
+html[data-lia-mode="presentation"] .lia-responsive-voice,
+html[data-lia-mode="slides"] .lia-responsive-voice{
+  transition: max-height .2s ease, opacity .2s ease, padding .2s ease;
+}
+
 html[data-lia-mode="presentation"] body,
 html[data-lia-mode="slides"] body{
   margin: 0 !important;
@@ -302,6 +320,38 @@ const ROOT_CSS = `
   --lia-tff-accent: rgb(11,95,255);
 }
 
+#lia-tff-voice-toggle-v2{
+  position: fixed !important;
+  right: 5% !important;
+  bottom: 0 !important;
+  z-index: 99999982 !important;
+  width: 28px !important;
+  height: 24px !important;
+  display: none;
+  align-items: center !important;
+  justify-content: center !important;
+  border: 1px solid color-mix(in srgb, var(--lia-tff-accent) 40%, #8a8f98) !important;
+  border-bottom: 0 !important;
+  border-radius: 8px 8px 0 0 !important;
+  background: color-mix(in srgb, var(--lia-tff-accent) 14%, #2e3035) !important;
+  color: #e9edf4 !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+  cursor: pointer !important;
+  user-select: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+#lia-tff-voice-toggle-v2:hover{
+  background: color-mix(in srgb, var(--lia-tff-accent) 22%, #2e3035) !important;
+}
+
+#lia-tff-voice-toggle-v2:focus,
+#lia-tff-voice-toggle-v2:focus-visible{
+  outline: none !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--lia-tff-accent) 40%, transparent) !important;
+}
+
 #${OVERLAY_ID}{
   position: fixed !important;
   z-index: 99999980 !important;
@@ -465,6 +515,10 @@ body.lia-tff-dark #${PANEL_ID}{
 @media (max-width: 680px){
   #lia-tff-btn-v2{ display: none !important; }
   body.lia-tff-panel-open #lia-tff-panel-v2{ display: none !important; }
+}
+
+@media (max-width: 1000px){
+  #lia-tff-voice-toggle-v2{ display: none !important; }
 }
 `;
 
