@@ -43,6 +43,7 @@ After importing this plugin your document will automatically:
 - Show an **AA button** in the toolbar (Presentation mode only) that opens a font-size slider (14–48 px, persisted in localStorage)
 - Auto-boost the font size to 18/24/32 px based on the current base font (can be overridden with the slider)
 - Support `data-lia-only` attributes to conditionally show blocks per mode
+- Support opt-in horizontal layouts for single- and multiple-choice quizzes
 
 ## `data-lia-only` — Mode-conditional content
 
@@ -87,3 +88,31 @@ If you prefer not to use `import:`, copy the following block directly into the h
 ``` markdown
 script:   https://cdn.jsdelivr.net/gh/MINT-the-GAP/lia-board-mode@0.0.1/dist/index.js
 ```
+
+## Horizontal single- and multiple-choice quizzes
+
+Place `<!-- horizontal-quiz -->` immediately before a single- or multiple-choice quiz. The choices then share the available content width and are separated by vertical lines in the current theme color. On narrow screens they wrap into two columns.
+
+---
+
+**Multiple choice**
+
+Choose the right options.
+
+<!-- horizontal-quiz -->
+-[[ ]] false
+-[[ ]] false
+-[[X]] right
+-[[ ]] false
+-[[X]] right
+
+---
+
+**Single choice**
+
+Choose the right option.
+
+<!-- horizontal-quiz -->
+-[( )] false
+-[(X)] right
+-[( )] false

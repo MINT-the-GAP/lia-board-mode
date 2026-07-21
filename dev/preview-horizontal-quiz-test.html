@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang='en'>
+<head>
+  <meta charset='utf-8'>
+  <meta name='viewport' content='width=device-width, initial-scale=1'>
+  <title>Horizontal quiz layout smoke test</title>
+  <style>
+    :root { --color-highlight: 12, 100, 220; }
+    body { margin: 0; padding: 2rem; }
+    main { width: 960px; max-width: 100%; }
+    .lia-quiz__answers { display: flex; flex-direction: column; }
+    .lia-quiz__answers > .lia-label:not(:last-child) { margin-block-end: 1rem; }
+    .lia-label { display: inline-flex; }
+  </style>
+</head>
+<body>
+  <main>
+    <div id='marked-multiple' class='lia-quiz lia-quiz-multiple-choice' horizontal-quiz>
+      <div class='lia-quiz__answers'>
+        <label class='lia-label'><input type='checkbox'><span>one</span></label>
+        <label class='lia-label'><input type='checkbox'><span>two</span></label>
+        <label class='lia-label'><input type='checkbox'><span>three</span></label>
+      </div>
+    </div>
+
+    <div id='marked-single' class='lia-quiz lia-quiz-single-choice' horizontal-quiz>
+      <div class='lia-quiz__answers'>
+        <label class='lia-label'><input type='radio' name='single'><span>one</span></label>
+        <label class='lia-label'><input type='radio' name='single'><span>two</span></label>
+      </div>
+    </div>
+
+    <div id='unmarked' class='lia-quiz lia-quiz-multiple-choice'>
+      <div class='lia-quiz__answers'>
+        <label class='lia-label'><input type='checkbox'><span>one</span></label>
+        <label class='lia-label'><input type='checkbox'><span>two</span></label>
+      </div>
+    </div>
+
+    <output id='result'>pending</output>
+  </main>
+
+  <script>
+    // Headless --dump-dom does not consistently advance compositor frames.
+    window.requestAnimationFrame = function (callback) {
+      return window.setTimeout(function () { callback(performance.now()); }, 0);
+    };
+    window.cancelAnimationFrame = window.clearTimeout;
+  </script>
+  <script src='../dist/index.js'></script>
+  <script>
+    setTimeout(function () {
+      var multiple = document.querySelector('#marked-multiple > .lia-quiz__answers');
+      var single = document.querySelector('#marked-single > .lia-quiz__answers');
+      var unmarked = document.querySelector('#unmarked > .lia-quiz__answers');
+      var first = multiple.children[0];
+      var second = multiple.children[1];
+      var third = multiple.children[2];
+      var multipleStyle = getComputedStyle(multiple);
+      var singleStyle = getComputedStyle(single);
+      var unmarkedStyle = getComputedStyle(unmarked);
+      var thirdStyle = getComputedStyle(third);
+      var firstSeparatorStyle = getComputedStyle(first, '::before');
+      var secondSeparatorStyle = getComputedStyle(second, '::before');
+      var thirdSeparatorStyle = getComputedStyle(third, '::before');
+      var expectedTheme = 'rgb(12, 100, 220)';
+      var firstRect = first.getBoundingClientRect();
+      var secondRect = second.getBoundingClientRect();
+      var thirdRect = third.getBoundingClientRect();
+      var isNarrow = matchMedia('(max-width: 760px)').matches;
+      var responsiveLayoutPassed = isNarrow
+        ? Math.abs(firstRect.top - secondRect.top) < 1 &&
+          thirdRect.top > firstRect.top + 1 &&
+          thirdRect.width > firstRect.width * 1.9 &&
+          thirdStyle.borderBlockStartWidth === '2px' &&
+          thirdSeparatorStyle.display === 'none'
+        : Math.abs(firstRect.top - thirdRect.top) < 1 &&
+          Math.abs(firstRect.width - thirdRect.width) < 1;
+      var stylePresent = Boolean(document.getElementById('lia-tff-style-content-v2'));
+
+      var passed =
+        stylePresent &&
+        multipleStyle.flexDirection === 'row' &&
+        singleStyle.flexDirection === 'row' &&
+        unmarkedStyle.flexDirection === 'column' &&
+        Math.abs(firstRect.width - secondRect.width) < 1 &&
+        firstSeparatorStyle.content === 'none' &&
+        secondSeparatorStyle.width === '2px' &&
+        secondSeparatorStyle.backgroundColor === expectedTheme &&
+        responsiveLayoutPassed;
+
+      var details = {
+        bundleInitialized: Boolean(window.__LIA_TFF_REG_V2__),
+        stylePresent: stylePresent,
+        isNarrow: isNarrow,
+        multipleDirection: multipleStyle.flexDirection,
+        singleDirection: singleStyle.flexDirection,
+        unmarkedDirection: unmarkedStyle.flexDirection,
+        firstWidth: firstRect.width,
+        secondWidth: secondRect.width,
+        thirdWidth: thirdRect.width,
+        firstTop: firstRect.top,
+        thirdTop: thirdRect.top,
+        firstSeparatorContent: firstSeparatorStyle.content,
+        secondSeparatorWidth: secondSeparatorStyle.width,
+        secondSeparatorColor: secondSeparatorStyle.backgroundColor,
+        thirdSeparatorDisplay: thirdSeparatorStyle.display,
+        thirdBorderWidth: thirdStyle.borderBlockStartWidth
+      };
+
+      document.body.dataset.horizontalQuizTest = passed ? 'pass' : 'fail';
+      document.getElementById('result').textContent =
+        (passed ? 'pass ' : 'fail ') + JSON.stringify(details);
+    }, 250);
+  </script>
+</body>
+</html>
