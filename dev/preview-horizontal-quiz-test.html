@@ -56,43 +56,55 @@
       var first = multiple.children[0];
       var second = multiple.children[1];
       var third = multiple.children[2];
+      var unmarkedFirst = unmarked.children[0];
       var multipleStyle = getComputedStyle(multiple);
       var singleStyle = getComputedStyle(single);
       var unmarkedStyle = getComputedStyle(unmarked);
-      var thirdStyle = getComputedStyle(third);
+      var firstStyle = getComputedStyle(first);
+      var firstTextStyle = getComputedStyle(first.querySelector('span'));
+      var unmarkedFirstStyle = getComputedStyle(unmarkedFirst);
+      var unmarkedFirstTextStyle = getComputedStyle(unmarkedFirst.querySelector('span'));
       var firstSeparatorStyle = getComputedStyle(first, '::before');
       var secondSeparatorStyle = getComputedStyle(second, '::before');
-      var thirdSeparatorStyle = getComputedStyle(third, '::before');
       var expectedTheme = 'rgb(12, 100, 220)';
       var firstRect = first.getBoundingClientRect();
       var secondRect = second.getBoundingClientRect();
       var thirdRect = third.getBoundingClientRect();
-      var isNarrow = matchMedia('(max-width: 760px)').matches;
-      var responsiveLayoutPassed = isNarrow
-        ? Math.abs(firstRect.top - secondRect.top) < 1 &&
-          thirdRect.top > firstRect.top + 1 &&
-          thirdRect.width > firstRect.width * 1.9 &&
-          thirdStyle.borderBlockStartWidth === '2px' &&
-          thirdSeparatorStyle.display === 'none'
-        : Math.abs(firstRect.top - thirdRect.top) < 1 &&
-          Math.abs(firstRect.width - thirdRect.width) < 1;
+      var isWide = matchMedia('(min-width: 761px)').matches;
+      var markedLayoutPassed = isWide
+        ? multipleStyle.flexDirection === 'row' &&
+          singleStyle.flexDirection === 'row' &&
+          Math.abs(firstRect.top - thirdRect.top) < 1 &&
+          Math.abs(firstRect.width - secondRect.width) < 1 &&
+          Math.abs(firstRect.width - thirdRect.width) < 1 &&
+          firstStyle.marginBlockEnd === '0px' &&
+          firstSeparatorStyle.content === 'none' &&
+          secondSeparatorStyle.width === '2px' &&
+          secondSeparatorStyle.backgroundColor === expectedTheme
+        : multipleStyle.flexDirection === 'column' &&
+          singleStyle.flexDirection === 'column' &&
+          secondRect.top > firstRect.top + 1 &&
+          thirdRect.top > secondRect.top + 1 &&
+          Math.abs(firstRect.width - secondRect.width) < 1 &&
+          firstStyle.marginBlockEnd === unmarkedFirstStyle.marginBlockEnd &&
+          firstStyle.display === unmarkedFirstStyle.display &&
+          firstStyle.position === unmarkedFirstStyle.position &&
+          firstStyle.flexGrow === unmarkedFirstStyle.flexGrow &&
+          firstStyle.padding === unmarkedFirstStyle.padding &&
+          firstTextStyle.overflowWrap === unmarkedFirstTextStyle.overflowWrap &&
+          secondSeparatorStyle.content === 'none';
       var stylePresent = Boolean(document.getElementById('lia-tff-style-content-v2'));
 
       var passed =
         stylePresent &&
-        multipleStyle.flexDirection === 'row' &&
-        singleStyle.flexDirection === 'row' &&
         unmarkedStyle.flexDirection === 'column' &&
-        Math.abs(firstRect.width - secondRect.width) < 1 &&
-        firstSeparatorStyle.content === 'none' &&
-        secondSeparatorStyle.width === '2px' &&
-        secondSeparatorStyle.backgroundColor === expectedTheme &&
-        responsiveLayoutPassed;
+        markedLayoutPassed;
 
       var details = {
         bundleInitialized: Boolean(window.__LIA_TFF_REG_V2__),
         stylePresent: stylePresent,
-        isNarrow: isNarrow,
+        isWide: isWide,
+        viewportWidth: innerWidth,
         multipleDirection: multipleStyle.flexDirection,
         singleDirection: singleStyle.flexDirection,
         unmarkedDirection: unmarkedStyle.flexDirection,
@@ -100,12 +112,22 @@
         secondWidth: secondRect.width,
         thirdWidth: thirdRect.width,
         firstTop: firstRect.top,
+        secondTop: secondRect.top,
         thirdTop: thirdRect.top,
+        firstDisplay: firstStyle.display,
+        firstPosition: firstStyle.position,
+        firstFlexGrow: firstStyle.flexGrow,
+        firstMarginBlockEnd: firstStyle.marginBlockEnd,
+        firstTextOverflowWrap: firstTextStyle.overflowWrap,
+        matchesStandardLabel: firstStyle.display === unmarkedFirstStyle.display &&
+          firstStyle.position === unmarkedFirstStyle.position &&
+          firstStyle.flexGrow === unmarkedFirstStyle.flexGrow &&
+          firstStyle.marginBlockEnd === unmarkedFirstStyle.marginBlockEnd &&
+          firstStyle.padding === unmarkedFirstStyle.padding &&
+          firstTextStyle.overflowWrap === unmarkedFirstTextStyle.overflowWrap,
         firstSeparatorContent: firstSeparatorStyle.content,
         secondSeparatorWidth: secondSeparatorStyle.width,
-        secondSeparatorColor: secondSeparatorStyle.backgroundColor,
-        thirdSeparatorDisplay: thirdSeparatorStyle.display,
-        thirdBorderWidth: thirdStyle.borderBlockStartWidth
+        secondSeparatorColor: secondSeparatorStyle.backgroundColor
       };
 
       document.body.dataset.horizontalQuizTest = passed ? 'pass' : 'fail';

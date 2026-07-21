@@ -91,7 +91,7 @@ script:   https://cdn.jsdelivr.net/gh/MINT-the-GAP/lia-board-mode@0.0.1/dist/ind
 
 ## Horizontal single- and multiple-choice quizzes
 
-Place `<!-- horizontal-quiz -->` immediately before a single- or multiple-choice quiz. The choices then share the available content width and are separated by vertical lines in the current theme color. On narrow screens they wrap into two columns.
+Place `<!-- horizontal-quiz -->` immediately before a single- or multiple-choice quiz. When enough width is available, the choices share the content width and are separated by vertical lines in the current theme color. On viewports up to 760 px, the quiz uses LiaScript's standard vertical layout.
 
 ---
 
