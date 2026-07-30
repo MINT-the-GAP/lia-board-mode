@@ -80,8 +80,12 @@ export function isNightlyNavigationHidden(): boolean {
 
 export function syncNightlyMiniMode(): void {
   try {
-    if (!ROOT_DOC.body) return;
-    ROOT_DOC.body.classList.toggle("lia-tff-nightly-mini", isNightlyNavigationHidden());
+    const body = ROOT_DOC.body;
+    if (!body) return;
+    const mini = isNightlyNavigationHidden();
+    if (body.classList.contains("lia-tff-nightly-mini") !== mini) {
+      body.classList.toggle("lia-tff-nightly-mini", mini);
+    }
   } catch (e) { }
 }
 

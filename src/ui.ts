@@ -68,7 +68,10 @@ function hasVoiceCollapsedClass(): boolean {
 }
 
 function setVoiceCollapsedClass(collapsed: boolean): void {
-  ROOT_DOC.documentElement.classList.toggle("lia-tff-voice-collapsed", collapsed);
+  const root = ROOT_DOC.documentElement;
+  if (root.classList.contains("lia-tff-voice-collapsed") !== collapsed) {
+    root.classList.toggle("lia-tff-voice-collapsed", collapsed);
+  }
 }
 
 function updateVoiceToggleButtonLabel(): void {
@@ -76,6 +79,15 @@ function updateVoiceToggleButtonLabel(): void {
   if (!btn) return;
 
   const collapsed = voiceCollapsedPref;
+  const expectedText = String.fromCodePoint(collapsed ? 0x25B2 : 0x25BC);
+  const expectedLabel = collapsed
+    ? 'Vorleseleiste ausfahren'
+    : 'Vorleseleiste einklappen';
+  if (
+    btn.textContent === expectedText &&
+    btn.getAttribute('aria-label') === expectedLabel &&
+    btn.getAttribute('title') === expectedLabel
+  ) return;
   btn.textContent = collapsed ? "▲" : "▼";
   const label = collapsed ? "Vorleseleiste ausfahren" : "Vorleseleiste einklappen";
   btn.setAttribute("aria-label", label);
@@ -294,7 +306,9 @@ export function setPresentationOnlyVisibility(mode: string): boolean {
   if (btn) btn.style.display = show ? "inline-flex" : "none";
 
   if (!show && panel) {
-    ROOT_DOC.body.classList.remove("lia-tff-panel-open");
+    if (ROOT_DOC.body.classList.contains("lia-tff-panel-open")) {
+      ROOT_DOC.body.classList.remove("lia-tff-panel-open");
+    }
     (panel as HTMLElement).style.display = "none";
     clearPosTimers();
   }

@@ -219,8 +219,10 @@ export function ensureContentCSS(): void {
 }
 
 let lastExitTuneKey: string | null = null;
-let lastExitTuneErrorPx = Number.POSITIVE_INFINITY;
+let lastExitTuneScroller: HTMLElement | null = null;
+let lastExitTuneContent: HTMLElement | null = null;
 const LAST_LINE_VISIBLE_FRACTION = 0.40;
+const EXIT_TUNE_EPSILON_PX = 1;
 
 function parseLenToPx(v: string, vh: number): number {
   const s = String(v || "").trim().toLowerCase();
@@ -273,6 +275,8 @@ function getLastTextLineRect(root: Element): DOMRect | null {
 export function syncSlideExitSpace(mode: string): void {
   if (mode !== "presentation" && mode !== "slides") {
     lastExitTuneKey = null;
+    lastExitTuneScroller = null;
+    lastExitTuneContent = null;
     return;
   }
 
@@ -280,7 +284,7 @@ export function syncSlideExitSpace(mode: string): void {
     const containers = Array.from(CONTENT_DOC.querySelectorAll(".lia-slide__container")) as HTMLElement[];
     if (!containers.length) return;
 
-    const vpH = ROOT_WIN.innerHeight || 1000;
+    const vpH = CONTENT_WIN.innerHeight || 1000;
     const scored = containers
       .filter(el => el.clientHeight > 80)
       .map(el => {
@@ -306,42 +310,50 @@ export function syncSlideExitSpace(mode: string): void {
       CONTENT_DOC.querySelector("main")) as HTMLElement | null;
     if (!content) return;
 
+    // The spacer is the output of this calculation. Remove it from the
+    // signature so changing the output cannot invalidate the cache itself.
+    const currentExitVar = CONTENT_WIN.getComputedStyle(CONTENT_DOC.documentElement)
+      .getPropertyValue('--lia-tff-slide-exit-space');
+    const currentExitPx = parseLenToPx(currentExitVar, CONTENT_WIN.innerHeight);
+
     const key = [
       mode,
-      Math.round(ROOT_WIN.innerWidth),
-      Math.round(ROOT_WIN.innerHeight),
+      Math.round(CONTENT_WIN.innerWidth),
+      Math.round(CONTENT_WIN.innerHeight),
       Math.round(scroller.clientHeight),
-      Math.round(scroller.scrollHeight),
+      Math.round(scroller.scrollHeight - currentExitPx),
       Math.round(scroller.getBoundingClientRect().top),
       Math.round(content.clientWidth),
-      Math.round(content.scrollHeight)
+      Math.round(content.scrollHeight - currentExitPx)
     ].join("|");
-    if (key === lastExitTuneKey && lastExitTuneErrorPx <= 0.08) return;
-
-    const oldTop = scroller.scrollTop;
-    let absErr = Number.POSITIVE_INFINITY;
+    // A clamped or quantized layout is still a completed measurement.
+    if (
+      scroller === lastExitTuneScroller &&
+      content === lastExitTuneContent &&
+      key === lastExitTuneKey
+    ) return;
 
     for (let pass = 0; pass < 3; pass++) {
-      scroller.scrollTop = scroller.scrollHeight;
-
       const lineRect = getLastTextLineRect(content);
       if (!lineRect) break;
 
       const scrollerRect = scroller.getBoundingClientRect();
-      const currentTop = lineRect.top;
+      const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+      const lineTopAtMax =
+        lineRect.top - Math.max(0, maxScrollTop - scroller.scrollTop);
       const targetTop =
         scrollerRect.top - ((1 - LAST_LINE_VISIBLE_FRACTION) * Math.max(2, lineRect.height));
 
       const currVar = CONTENT_WIN.getComputedStyle(CONTENT_DOC.documentElement)
         .getPropertyValue("--lia-tff-slide-exit-space");
-      const currPx = parseLenToPx(currVar, ROOT_WIN.innerHeight);
+      const currPx = parseLenToPx(currVar, CONTENT_WIN.innerHeight);
 
-      const delta = currentTop - targetTop;
-      absErr = Math.abs(delta);
-      if (absErr <= 0.08) break;
+      const delta = lineTopAtMax - targetTop;
+      const absErr = Math.abs(delta);
+      if (absErr <= EXIT_TUNE_EPSILON_PX) break;
 
       const newPx = clamp(currPx + delta, 0, scroller.clientHeight * 1.25);
-      if (Math.abs(newPx - currPx) < 0.05) break;
+      if (Math.abs(newPx - currPx) < EXIT_TUNE_EPSILON_PX) break;
 
       setVar(CONTENT_DOC, "--lia-tff-slide-exit-space", `${newPx.toFixed(2)}px`);
 
@@ -349,9 +361,9 @@ export function syncSlideExitSpace(mode: string): void {
       void content.offsetHeight;
     }
 
-    scroller.scrollTop = oldTop;
     lastExitTuneKey = key;
-    lastExitTuneErrorPx = absErr;
+    lastExitTuneScroller = scroller;
+    lastExitTuneContent = content;
   } catch (e) { }
 }
 

@@ -5,13 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Board Mode Scroll Preview Test</title>
   <style>
-    html, body { margin: 0; padding: 0; }
+    html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
     body { font-family: sans-serif; line-height: 1.5; }
     header#lia-toolbar-nav { position: sticky; top: 0; height: 48px; background: #f2f2f2; z-index: 10; }
     .lia-header__left { display: flex; align-items: center; height: 48px; gap: 8px; padding: 0 8px; }
     .lia-btn { background: rgb(11,95,255); color: #fff; border: none; border-radius: 6px; padding: 8px 10px; }
+    .lia-slide__container { height: calc(100vh - 48px); overflow-y: auto; scrollbar-gutter: stable; }
     main { max-width: 860px; margin: 0 auto; padding: 16px; }
     p { margin: 0 0 14px 0; }
+    .native-bottom-space { height: 100vh; }
+    #scroll-jitter-result {
+      position: fixed;
+      right: 8px;
+      bottom: 8px;
+      z-index: 20;
+      max-width: min(540px, calc(100vw - 16px));
+      margin: 0;
+      padding: 8px;
+      background: #fff;
+      border: 1px solid #777;
+      font: 12px/1.35 monospace;
+      white-space: pre-wrap;
+    }
   </style>
 </head>
 <body>
@@ -20,7 +35,8 @@
       <button id="lia-btn-toc" class="lia-btn" aria-label="Inhaltsverzeichnis">TOC</button>
     </div>
   </header>
-  <main>
+  <div id="slide-scroller" class="lia-slide__container">
+    <main class="lia-slide__content">
     <h1>Scroll-Test</h1>
     <p>Dieser Test simuliert eine lange Folie im Presentation-Mode.</p>
     <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>
@@ -39,11 +55,132 @@
     <p>Curabitur ullamcorper ultricies nisi.</p>
     <p>Nam eget dui. Etiam rhoncus.</p>
     <p id="lastline">Dies ist die letzte Zeile der Folie.</p>
-  </main>
+    <!-- Forces the lower clamp: the plugin must stop after discovering that
+         native content already occupies the desired exit space. -->
+    <div class="native-bottom-space" aria-hidden="true"></div>
+    </main>
+  </div>
+
+  <pre id="scroll-jitter-result">running</pre>
 
   <script>
     localStorage.setItem("settings", JSON.stringify({ mode: "presentation", language: "de" }));
   </script>
-  <script src="/dist/index.js?t=2"></script>
+  <script>
+    const scrollProbe = { writes: 0, events: 0 };
+    const slideScroller = document.getElementById('slide-scroller');
+    let owner = slideScroller;
+    let scrollTopDescriptor = null;
+
+    while (owner && !scrollTopDescriptor) {
+      scrollTopDescriptor = Object.getOwnPropertyDescriptor(owner, 'scrollTop');
+      owner = Object.getPrototypeOf(owner);
+    }
+
+    if (!scrollTopDescriptor || !scrollTopDescriptor.get || !scrollTopDescriptor.set) {
+      throw new Error('scrollTop descriptor unavailable');
+    }
+
+    scrollTopDescriptor.set.call(slideScroller, 73);
+    Object.defineProperty(slideScroller, 'scrollTop', {
+      configurable: true,
+      get() { return scrollTopDescriptor.get.call(slideScroller); },
+      set(value) {
+        scrollProbe.writes++;
+        scrollTopDescriptor.set.call(slideScroller, value);
+      }
+    });
+    slideScroller.addEventListener('scroll', () => { scrollProbe.events++; });
+  </script>
+  <script src="../dist/index.js?t=scroll-jitter"></script>
+  <script>
+    (async function runScrollJitterTest() {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const result = document.getElementById('scroll-jitter-result');
+      const samples = [];
+
+      await wait(600);
+      const startTop = slideScroller.scrollTop;
+      scrollProbe.writes = 0;
+      scrollProbe.events = 0;
+      let rootClassMutations = 0;
+      let bodyClassMutations = 0;
+      let voiceButtonMutations = 0;
+      const rootClassObserver = new MutationObserver(records => {
+        rootClassMutations += records.length;
+      });
+      rootClassObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class']
+      });
+      const bodyClassObserver = new MutationObserver(records => {
+        bodyClassMutations += records.length;
+      });
+      bodyClassObserver.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['class']
+      });
+      const voiceButton = document.getElementById('lia-tff-voice-toggle-v2');
+      const voiceButtonObserver = new MutationObserver(records => {
+        voiceButtonMutations += records.length;
+      });
+      if (voiceButton) {
+        voiceButtonObserver.observe(voiceButton, {
+          attributes: true,
+          childList: true
+        });
+      }
+
+      for (let i = 0; i < 20; i++) {
+        document.documentElement.toggleAttribute('data-scroll-test-pulse');
+        await wait(50);
+        samples.push({
+          top: slideScroller.scrollTop,
+          height: slideScroller.scrollHeight,
+          width: slideScroller.clientWidth,
+          exitSpace: parseFloat(getComputedStyle(document.documentElement)
+            .getPropertyValue('--lia-tff-slide-exit-space')) || 0
+        });
+      }
+
+      await wait(100);
+      rootClassObserver.disconnect();
+      bodyClassObserver.disconnect();
+      voiceButtonObserver.disconnect();
+      const spread = key =>
+        Math.max(...samples.map(sample => sample[key])) -
+        Math.min(...samples.map(sample => sample[key]));
+      const metrics = {
+        pluginStylePresent: Boolean(document.getElementById('lia-tff-style-content-v2')),
+        mode: document.documentElement.dataset.liaMode || null,
+        voiceButtonPresent: Boolean(voiceButton),
+        rootClassMutations,
+        bodyClassMutations,
+        voiceButtonMutations,
+        scrollTopWrites: scrollProbe.writes,
+        scrollEvents: scrollProbe.events,
+        scrollTopDelta: Math.abs(slideScroller.scrollTop - startTop),
+        scrollHeightSpread: spread('height'),
+        clientWidthSpread: spread('width'),
+        exitSpaceSpread: spread('exitSpace')
+      };
+      const pass =
+        metrics.pluginStylePresent &&
+        metrics.mode === 'presentation' &&
+        metrics.voiceButtonPresent &&
+        metrics.rootClassMutations === 0 &&
+        metrics.bodyClassMutations === 0 &&
+        metrics.voiceButtonMutations === 0 &&
+        metrics.scrollTopWrites === 0 &&
+        metrics.scrollEvents === 0 &&
+        metrics.scrollTopDelta <= 0.5 &&
+        metrics.scrollHeightSpread <= 1 &&
+        metrics.clientWidthSpread <= 1 &&
+        metrics.exitSpaceSpread <= 0.1;
+
+      document.body.dataset.scrollJitterTest = pass ? 'pass' : 'fail';
+      result.textContent = JSON.stringify({ pass, ...metrics });
+    })();
+  </script>
 </body>
 </html>

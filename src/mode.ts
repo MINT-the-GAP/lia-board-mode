@@ -69,5 +69,8 @@ export function detectMode(): string {
 }
 
 export function applyModeAttr(mode: string): void {
-  try { CONTENT_DOC.documentElement.dataset.liaMode = mode; } catch (e) { }
+  try {
+    const root = CONTENT_DOC.documentElement;
+    if (root.dataset.liaMode !== mode) root.dataset.liaMode = mode;
+  } catch (e) { }
 }
