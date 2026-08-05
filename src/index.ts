@@ -1,5 +1,10 @@
 // Entry point: guards against double-init, runs tick() on each frame, and wires all observers.
 
+import { initPresenterSupport, syncPresenterSupport } from './presenter';
+import { initReverseNavigation, syncReverseNavigation } from './reverseNavigation';
+
+import { syncAutoscrolling } from "./autoscrolling";
+
 import { initInstance, I, ROOT_WIN } from "./state";
 import { detectMode, applyModeAttr, safeGetSettingsRaw } from "./mode";
 import { ensureContentCSS, ensureRootCSS, syncAccent, syncDarkMode, syncSlideExitSpace } from "./css";
@@ -15,11 +20,16 @@ import { initModeOnly, applyModeOnlyNow } from "./modeOnly";
 
 (function () {
   if (!initInstance()) return;
+  initReverseNavigation();
+  initPresenterSupport();
 
   // =========================================================
   // Main tick
   // =========================================================
   function tick(): void {
+    syncAutoscrolling();
+    syncReverseNavigation(detectMode());
+    syncPresenterSupport(detectMode());
     if (I.ticking) return;
     I.ticking = true;
 

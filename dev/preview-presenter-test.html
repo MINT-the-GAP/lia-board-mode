@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang='de'>
+<head>
+  <meta charset='utf-8' />
+  <meta name='viewport' content='width=device-width, initial-scale=1' />
+  <title>Board Mode Presenter Preview Test</title>
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body { font-family: sans-serif; }
+    iframe { width: 720px; height: 420px; border: 2px solid #777; }
+    #presenter-result {
+      position: fixed;
+      right: 8px;
+      bottom: 8px;
+      z-index: 20;
+      max-width: min(760px, calc(100vw - 16px));
+      padding: 8px;
+      background: white;
+      border: 1px solid #777;
+      font: 12px/1.35 monospace;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <iframe id='course-frame' title='Simulierter LiaScript-Kurs'></iframe>
+  <pre id='presenter-result'>running</pre>
+
+  <script>
+    (function configureCourseFrame() {
+      const frame = document.getElementById('course-frame');
+      const closeScript = '</scr' + 'ipt>';
+
+      try {
+        localStorage.setItem('settings', JSON.stringify({
+          mode: 'presentation',
+          language: 'de'
+        }));
+      } catch (e) { }
+
+      frame.srcdoc =
+        '<!doctype html>' +
+        '<html lang=\'de\' data-lia-mode=\'presentation\'>' +
+        '<head><base href=\'../\'></head><body>' +
+        '<main class=\'lia-slide__content\'>' +
+        '<nav id=\'presenter-nav\'>' +
+        '<button id=\'lia-btn-prev\' type=\'button\'>Zurück</button>' +
+        '<button id=\'lia-btn-next\' type=\'button\'>Weiter</button>' +
+        '</nav>' +
+        '<input id=\'editor-input\' value=\'Text\' />' +
+        '<div id=\'editable\' contenteditable=\'true\'><span id=\'editable-child\'>Editierbar</span></div>' +
+        '<div id=\'textbox\' role=\'textbox\'>Textbox</div>' +
+        '<p id=\'event-target\'>Presenter-Ziel</p>' +
+        '</main>' +
+        '<script>' +
+        'window.presenterProbe={next:0,previous:0,bubbled:0};' +
+        'document.getElementById(\'lia-btn-next\').addEventListener(\'click\',function(){window.presenterProbe.next++;});' +
+        'document.getElementById(\'lia-btn-prev\').addEventListener(\'click\',function(){window.presenterProbe.previous++;});' +
+        'document.addEventListener(\'keydown\',function(){window.presenterProbe.bubbled++;});' +
+        'try{localStorage.setItem(\'settings\',JSON.stringify({mode:\'presentation\',language:\'de\'}));}catch(e){}' +
+        closeScript +
+        '<script src=\'dist/index.js?t=presenter-support\'>' +
+        closeScript +
+        '</body></html>';
+    })();
+  </script>
+
+  <script>
+    (async function runPresenterTest() {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const frame = document.getElementById('course-frame');
+      const result = document.getElementById('presenter-result');
+
+      await new Promise(resolve => {
+        if (frame.contentDocument && frame.contentDocument.readyState === 'complete') {
+          resolve();
+        } else {
+          frame.addEventListener('load', resolve, { once: true });
+        }
+      });
+      await wait(350);
+
+      const contentWindow = frame.contentWindow;
+      const contentDocument = frame.contentDocument;
+      const probe = contentWindow.presenterProbe;
+      const body = contentDocument.body;
+      const input = contentDocument.getElementById('editor-input');
+
+      function fire(target, type, key, code, options) {
+        const view = target.ownerDocument.defaultView;
+        const event = new view.KeyboardEvent(type, Object.assign({
+          bubbles: true,
+          cancelable: true,
+          key,
+          code,
+          repeat: false
+        }, options || {}));
+        target.dispatchEvent(event);
+        return event;
+      }
+
+      const iframeNext = fire(body, 'keydown', 'PageDown', 'PageDown');
+      const iframeNextWorks =
+        probe.next === 1 && iframeNext.defaultPrevented && probe.bubbled === 0;
+
+      const iframePrevious = fire(body, 'keydown', 'PageUp', 'PageUp');
+      const iframePreviousWorks =
+        probe.previous === 1 && iframePrevious.defaultPrevented && probe.bubbled === 0;
+
+      const rootNext = fire(document.body, 'keydown', 'PageDown', 'PageDown');
+      const rootNextWorks =
+        probe.next === 2 && rootNext.defaultPrevented;
+
+      const rootPrevious = fire(document.body, 'keydown', 'PageUp', 'PageUp');
+      const rootPreviousWorks =
+        probe.previous === 2 && rootPrevious.defaultPrevented;
+
+      const repeatedNext = fire(body, 'keydown', 'PageDown', 'PageDown', {
+        repeat: true
+      });
+      const repeatSuppressed =
+        probe.next === 2 && repeatedNext.defaultPrevented;
+
+      const pageKeyup = fire(body, 'keyup', 'PageDown', 'PageDown');
+      const keyupIgnored =
+        probe.next === 2 && !pageKeyup.defaultPrevented;
+
+      const arrow = fire(body, 'keydown', 'ArrowRight', 'ArrowRight');
+      const nativeArrowUntouched =
+        probe.next === 2 && !arrow.defaultPrevented;
+
+      const modified = fire(body, 'keydown', 'PageDown', 'PageDown', {
+        ctrlKey: true
+      });
+      const modifierIgnored =
+        probe.next === 2 && !modified.defaultPrevented;
+
+      const inputPage = fire(input, 'keydown', 'PageDown', 'PageDown');
+      const inputPeriod = fire(input, 'keydown', '.', 'Period');
+      const inputB = fire(input, 'keydown', 'b', 'KeyB');
+      const inputIgnored =
+        probe.next === 2 &&
+        !inputPage.defaultPrevented &&
+        !inputPeriod.defaultPrevented &&
+        !inputB.defaultPrevented &&
+        !document.documentElement.hasAttribute('data-lia-tff-presenter-blackout');
+
+      const editableChild = contentDocument.getElementById('editable-child');
+      const textbox = contentDocument.getElementById('textbox');
+      const editablePage = fire(editableChild, 'keydown', 'PageDown', 'PageDown');
+      const textboxPage = fire(textbox, 'keydown', 'PageDown', 'PageDown');
+      const editableIgnored =
+        probe.next === 2 &&
+        !editablePage.defaultPrevented &&
+        !textboxPage.defaultPrevented;
+
+      const modal = contentDocument.createElement('div');
+      modal.className = 'lia-modal';
+      body.appendChild(modal);
+      const modalPage = fire(body, 'keydown', 'PageDown', 'PageDown');
+      modal.remove();
+      const modalBlocksNavigation =
+        probe.next === 2 && !modalPage.defaultPrevented;
+
+      let nextButton = contentDocument.getElementById('lia-btn-next');
+      nextButton.disabled = true;
+      const disabledPage = fire(body, 'keydown', 'PageDown', 'PageDown');
+      nextButton.disabled = false;
+      const disabledButtonRespected =
+        probe.next === 2 && disabledPage.defaultPrevented;
+
+      const nav = contentDocument.getElementById('presenter-nav');
+      nav.setAttribute('inert', '');
+      const inertPage = fire(body, 'keydown', 'PageDown', 'PageDown');
+      nav.removeAttribute('inert');
+      const inertButtonRespected =
+        probe.next === 2 && inertPage.defaultPrevented;
+
+      const replacement = contentDocument.createElement('button');
+      replacement.id = 'lia-btn-next';
+      replacement.type = 'button';
+      replacement.textContent = 'Weiter neu';
+      replacement.addEventListener('click', () => { probe.next++; });
+      nextButton.replaceWith(replacement);
+      nextButton = replacement;
+      const replacementPage = fire(body, 'keydown', 'PageDown', 'PageDown');
+      const rerenderedButtonFound =
+        probe.next === 3 && replacementPage.defaultPrevented;
+
+      input.blur();
+      const focusBeforeBlackout = contentDocument.activeElement;
+      const periodOn = fire(body, 'keydown', '.', 'Period');
+      const overlay = document.getElementById('lia-tff-presenter-blackout-v1');
+      const overlayRect = overlay.getBoundingClientRect();
+      const overlayStyle = getComputedStyle(overlay);
+      const blackoutOn =
+        periodOn.defaultPrevented &&
+        !overlay.hidden &&
+        document.documentElement.hasAttribute('data-lia-tff-presenter-blackout');
+      const overlayCoversRoot =
+        overlay.ownerDocument === document &&
+        overlayStyle.position === 'fixed' &&
+        overlayStyle.backgroundColor === 'rgb(0, 0, 0)' &&
+        overlayStyle.pointerEvents === 'auto' &&
+        Number(overlayStyle.zIndex) === 2147483647 &&
+        Math.abs(overlayRect.left) <= 1 &&
+        Math.abs(overlayRect.top) <= 1 &&
+        Math.abs(overlayRect.right - innerWidth) <= 1 &&
+        Math.abs(overlayRect.bottom - innerHeight) <= 1 &&
+        document.elementFromPoint(1, 1) === overlay &&
+        document.elementFromPoint(
+          Math.floor(innerWidth / 2),
+          Math.floor(innerHeight / 2)
+        ) === overlay;
+      const overlayAccessible =
+        overlay.getAttribute('aria-hidden') === 'true' &&
+        contentDocument.activeElement === focusBeforeBlackout;
+
+      const periodRepeat = fire(body, 'keydown', '.', 'Period', {
+        repeat: true
+      });
+      const blackoutRepeatSuppressed =
+        periodRepeat.defaultPrevented && !overlay.hidden;
+
+      const periodKeyup = fire(body, 'keyup', '.', 'Period');
+      const blackoutKeyupIgnored =
+        !periodKeyup.defaultPrevented && !overlay.hidden;
+
+      const nextBehindBlack = fire(body, 'keydown', 'PageDown', 'PageDown');
+      const navigationBehindBlackout =
+        nextBehindBlack.defaultPrevented &&
+        probe.next === 4 &&
+        !overlay.hidden;
+
+      const periodOff = fire(body, 'keydown', '.', 'Period');
+      const sameButtonTurnsOff =
+        periodOff.defaultPrevented &&
+        overlay.hidden &&
+        !document.documentElement.hasAttribute('data-lia-tff-presenter-blackout');
+
+      const bOn = fire(body, 'keydown', 'B', 'KeyB', { shiftKey: true });
+      const bShortcutWorks =
+        bOn.defaultPrevented && !overlay.hidden;
+      const escapeOff = fire(body, 'keydown', 'Escape', 'Escape');
+      const escapeClosesOnlyWhenActive =
+        escapeOff.defaultPrevented && overlay.hidden;
+      const escapeInactive = fire(body, 'keydown', 'Escape', 'Escape');
+      const inactiveEscapeUntouched = !escapeInactive.defaultPrevented;
+
+      contentDocument.documentElement.toggleAttribute('data-presenter-pulse');
+      await wait(100);
+      const singleOverlay =
+        document.querySelectorAll('#lia-tff-presenter-blackout-v1').length === 1;
+
+      fire(body, 'keydown', 'b', 'KeyB');
+      try {
+        localStorage.setItem('settings', JSON.stringify({ mode: 'textbook' }));
+      } catch (e) { }
+      window.dispatchEvent(new StorageEvent('storage', { key: 'settings' }));
+      contentDocument.documentElement.toggleAttribute('data-presenter-mode-pulse');
+      await wait(250);
+      const modeSwitchClearsBlackout = overlay.hidden;
+      const textbookNext = fire(body, 'keydown', 'PageDown', 'PageDown');
+      const textbookKeepsPageKeys =
+        probe.next === 4 && !textbookNext.defaultPrevented;
+
+      try {
+        localStorage.setItem('settings', JSON.stringify({ mode: 'slides' }));
+      } catch (e) { }
+      window.dispatchEvent(new StorageEvent('storage', { key: 'settings' }));
+      contentDocument.documentElement.toggleAttribute('data-presenter-slides-pulse');
+      await wait(250);
+      const slidesNext = fire(body, 'keydown', 'PageDown', 'PageDown');
+      const slidesModeWorks =
+        probe.next === 5 && slidesNext.defaultPrevented;
+
+      const metrics = {
+        iframeNextWorks,
+        iframePreviousWorks,
+        rootNextWorks,
+        rootPreviousWorks,
+        repeatSuppressed,
+        keyupIgnored,
+        nativeArrowUntouched,
+        modifierIgnored,
+        inputIgnored,
+        editableIgnored,
+        modalBlocksNavigation,
+        disabledButtonRespected,
+        inertButtonRespected,
+        rerenderedButtonFound,
+        blackoutOn,
+        overlayCoversRoot,
+        overlayAccessible,
+        blackoutRepeatSuppressed,
+        blackoutKeyupIgnored,
+        navigationBehindBlackout,
+        sameButtonTurnsOff,
+        bShortcutWorks,
+        escapeClosesOnlyWhenActive,
+        inactiveEscapeUntouched,
+        singleOverlay,
+        modeSwitchClearsBlackout,
+        textbookKeepsPageKeys,
+        slidesModeWorks,
+        nextClicks: probe.next,
+        previousClicks: probe.previous,
+        bubbledEvents: probe.bubbled
+      };
+      const pass = Object.entries(metrics)
+        .filter(([, value]) => typeof value === 'boolean')
+        .every(([, value]) => value);
+
+      document.body.dataset.presenterTest = pass ? 'pass' : 'fail';
+      result.textContent = JSON.stringify({ pass, ...metrics });
+    })();
+  </script>
+</body>
+</html>

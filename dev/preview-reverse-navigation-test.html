@@ -1,0 +1,734 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Board Mode Reverse Navigation Test</title>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      font-family: sans-serif;
+    }
+
+    #course-frame {
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+
+    #reverse-navigation-result {
+      position: fixed;
+      right: 8px;
+      bottom: 8px;
+      z-index: 20;
+      max-width: min(900px, calc(100vw - 16px));
+      max-height: 45vh;
+      overflow: auto;
+      padding: 8px;
+      border: 1px solid #777;
+      background: white;
+      font: 12px/1.35 monospace;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <iframe id="course-frame" title="Simulierter LiaScript-Kurs"></iframe>
+  <pre id="reverse-navigation-result">running</pre>
+
+  <script>
+    (function configureCourseFrame() {
+      var frame = document.getElementById('course-frame');
+      var closeScript = '</scr' + 'ipt>';
+
+      try {
+        localStorage.setItem('settings', JSON.stringify({
+          mode: 'presentation',
+          language: 'de'
+        }));
+      } catch (e) { }
+
+      function installCourseHarness() {
+        var counter = document.querySelector('.lia-pagination__current');
+        var previousButton = document.getElementById('lia-btn-prev');
+        var nextButton = document.getElementById('lia-btn-next');
+        var tocButton = document.getElementById('toc-slide-one');
+        var neutralButton = document.getElementById('neutral-action');
+        var stage = document.getElementById('stage');
+        var totals = { 1: 3, 2: 0 };
+        var transitionEpoch = 0;
+        var state = { slide: 2, visible: 0 };
+        var targetParsed = true;
+        var injectedModal = null;
+        var config = {
+          lazyTarget: false,
+          parseDelayMs: 200,
+          oldZeroBeforeReset: false,
+          nextDelayMs: 0,
+          modalAfterFirstNext: false,
+          disableNextButton: false
+        };
+        var probe = {
+          log: [],
+          previousActions: 0,
+          nextActions: 0,
+          prevButtonClicks: 0,
+          nextButtonClicks: 0,
+          arrowPrevious: 0,
+          arrowNext: 0,
+          tocClicks: 0,
+          nextSlideMoves: 0,
+          injectedModals: 0
+        };
+
+        function effectsFor(slide) {
+          if (slide === 1 && !targetParsed) return 0;
+          return totals[slide] || 0;
+        }
+
+        function snapshot() {
+          return {
+            slide: state.slide,
+            visible: state.visible,
+            effects: effectsFor(state.slide)
+          };
+        }
+
+        function render(reason) {
+          var effects = effectsFor(state.slide);
+          counter.textContent = String(state.slide) +
+            (effects > 0 ? ' (' + state.visible + '/' + effects + ')' : '');
+          stage.textContent =
+            'Folie ' + state.slide + ', Animation ' + state.visible + '/' + effects;
+          probe.log.push({
+            reason: reason,
+            slide: state.slide,
+            visible: state.visible,
+            effects: effects,
+            counter: counter.textContent
+          });
+        }
+
+        function removeInjectedModal() {
+          if (injectedModal) injectedModal.remove();
+          injectedModal = null;
+        }
+
+        function injectModalAfterFirstNext() {
+          if (
+            !config.modalAfterFirstNext ||
+            injectedModal ||
+            state.slide !== 1 ||
+            state.visible !== 1
+          ) return;
+
+          injectedModal = document.createElement('div');
+          injectedModal.className = 'lia-modal';
+          injectedModal.setAttribute('data-reverse-harness-modal', 'true');
+          document.body.appendChild(injectedModal);
+          probe.injectedModals += 1;
+        }
+
+        function navigatePrevious(reason) {
+          probe.previousActions += 1;
+
+          if (state.visible > 0) {
+            state.visible -= 1;
+            render(reason + '-effect');
+            return;
+          }
+
+          if (state.slide <= 1) return;
+
+          transitionEpoch += 1;
+          var epoch = transitionEpoch;
+          state.slide -= 1;
+
+          if (config.lazyTarget) {
+            targetParsed = false;
+            state.visible = 0;
+            render(reason + '-unparsed');
+
+            window.setTimeout(function () {
+              if (epoch !== transitionEpoch || state.slide !== 1) return;
+              targetParsed = true;
+              state.visible = 0;
+              render(reason + '-parsed');
+            }, config.parseDelayMs);
+            return;
+          }
+
+          targetParsed = true;
+
+          if (config.oldZeroBeforeReset) {
+            state.visible = 0;
+            render(reason + '-old-zero');
+
+            window.setTimeout(function () {
+              if (epoch !== transitionEpoch || state.slide !== 1) return;
+              state.visible = 0;
+              render(reason + '-reset-zero');
+            }, 60);
+            return;
+          }
+
+          // A revisited LiaScript section can briefly expose its old state
+          // before generate() resets effect_model.visible to zero.
+          state.visible = effectsFor(state.slide);
+          render(reason + '-old');
+
+          window.setTimeout(function () {
+            if (epoch !== transitionEpoch || state.slide !== 1) return;
+            state.visible = 0;
+            render(reason + '-reset');
+          }, 60);
+        }
+
+        function navigateNext(reason) {
+          probe.nextActions += 1;
+          var effects = effectsFor(state.slide);
+
+          if (state.visible < effects) {
+            var epoch = transitionEpoch;
+            var slide = state.slide;
+            var visible = state.visible;
+            var commit = function () {
+              if (
+                epoch !== transitionEpoch ||
+                state.slide !== slide ||
+                state.visible !== visible
+              ) return;
+              state.visible += 1;
+              render(reason + '-effect');
+              injectModalAfterFirstNext();
+            };
+
+            if (config.nextDelayMs > 0) {
+              window.setTimeout(commit, config.nextDelayMs);
+            } else {
+              commit();
+            }
+            return;
+          }
+
+          if (state.slide >= 2) return;
+
+          transitionEpoch += 1;
+          probe.nextSlideMoves += 1;
+          state.slide += 1;
+          state.visible = 0;
+          render(reason + '-slide');
+        }
+
+        previousButton.addEventListener('click', function () {
+          probe.prevButtonClicks += 1;
+          navigatePrevious('prev-button');
+        });
+
+        nextButton.addEventListener('click', function () {
+          probe.nextButtonClicks += 1;
+          navigateNext('next-button');
+        });
+
+        tocButton.addEventListener('click', function () {
+          transitionEpoch += 1;
+          probe.tocClicks += 1;
+          state.slide = 1;
+          state.visible = 0;
+          render('toc');
+        });
+
+        document.addEventListener('keydown', function (event) {
+          if (
+            document.querySelector(
+              '.lia-modal, dialog[open], [role=dialog][aria-modal=true]'
+            )
+          ) return;
+
+          if (event.key === 'ArrowLeft') {
+            probe.arrowPrevious += 1;
+            navigatePrevious('arrow-left');
+          } else if (event.key === 'ArrowRight') {
+            probe.arrowNext += 1;
+            navigateNext('arrow-right');
+          }
+        });
+
+        function reset(options) {
+          options = options || {};
+          // The neutral click also cancels a possibly pending plugin intent.
+          neutralButton.click();
+          removeInjectedModal();
+          transitionEpoch += 1;
+          config.lazyTarget = !!options.lazyTarget;
+          config.parseDelayMs = options.parseDelayMs || 200;
+          config.oldZeroBeforeReset = !!options.oldZeroBeforeReset;
+          config.nextDelayMs = options.nextDelayMs || 0;
+          config.modalAfterFirstNext = !!options.modalAfterFirstNext;
+          config.disableNextButton = !!options.disableNextButton;
+          targetParsed = !config.lazyTarget;
+          nextButton.disabled = config.disableNextButton;
+          state.slide = 2;
+          state.visible = 0;
+          render('reset');
+        }
+
+        function enableNextAndPulse() {
+          nextButton.disabled = false;
+          config.disableNextButton = false;
+          render('next-enabled-after-timeout');
+        }
+
+        function showDirectTarget() {
+          transitionEpoch += 1;
+          targetParsed = true;
+          state.slide = 1;
+          state.visible = 0;
+          render('direct-target-after-timeout');
+        }
+
+        window.reverseHarness = {
+          probe: probe,
+          reset: reset,
+          snapshot: snapshot,
+          enableNextAndPulse: enableNextAndPulse,
+          showDirectTarget: showDirectTarget
+        };
+
+        render('initial');
+      }
+
+      frame.srcdoc =
+        '<!doctype html>' +
+        '<html lang="de" data-lia-mode="presentation">' +
+        '<head><base href="../"></head><body>' +
+        '<main class="lia-slide__content">' +
+        '<div class="lia-pagination">' +
+        '<div class="lia-pagination__content">' +
+        '<button id="lia-btn-next" type="button">Weiter</button>' +
+        '<span class="lia-pagination__current">2</span>' +
+        '<button id="lia-btn-prev" type="button">Zurueck</button>' +
+        '</div>' +
+        '</div>' +
+        '<button id="toc-slide-one" type="button">TOC: Folie 1</button>' +
+        '<button id="neutral-action" type="button">Neutral</button>' +
+        '<input id="editor-input" value="Text" />' +
+        '<div id="stage" tabindex="-1"></div>' +
+        '</main>' +
+        '<script>(' + installCourseHarness.toString() + ')();' +
+        closeScript +
+        '<script src="dist/index.js?t=reverse-navigation">' +
+        closeScript +
+        '</body></html>';
+    })();
+  </script>
+
+  <script>
+    (async function runReverseNavigationTest() {
+      var wait = function (ms) {
+        return new Promise(function (resolve) {
+          window.setTimeout(resolve, ms);
+        });
+      };
+      var frame = document.getElementById('course-frame');
+      var result = document.getElementById('reverse-navigation-result');
+
+      try {
+        await new Promise(function (resolve) {
+          if (
+            frame.contentDocument &&
+            frame.contentDocument.readyState === 'complete'
+          ) {
+            resolve();
+          } else {
+            frame.addEventListener('load', resolve, { once: true });
+          }
+        });
+        await wait(350);
+
+        var contentWindow = frame.contentWindow;
+        var contentDocument = frame.contentDocument;
+        var harness = contentWindow.reverseHarness;
+        var probe = harness.probe;
+        var body = contentDocument.body;
+        var input = contentDocument.getElementById('editor-input');
+        var previousButton = contentDocument.getElementById('lia-btn-prev');
+        var tocButton = contentDocument.getElementById('toc-slide-one');
+
+        function fire(target, key, code, options) {
+          var view = target.ownerDocument.defaultView;
+          var event = new view.KeyboardEvent('keydown', Object.assign({
+            bubbles: true,
+            cancelable: true,
+            key: key,
+            code: code,
+            repeat: false
+          }, options || {}));
+          target.dispatchEvent(event);
+          return event;
+        }
+
+        function setMode(mode) {
+          var raw = JSON.stringify({ mode: mode, language: 'de' });
+          try {
+            localStorage.setItem('settings', raw);
+          } catch (e) { }
+          contentDocument.documentElement.dataset.liaMode = mode;
+          window.dispatchEvent(new StorageEvent('storage', {
+            key: 'settings',
+            newValue: raw
+          }));
+          contentDocument.documentElement.toggleAttribute(
+            'data-reverse-navigation-mode-pulse'
+          );
+        }
+
+        async function prepare(mode, options) {
+          setMode(mode);
+          await wait(90);
+          harness.reset(options);
+          await wait(90);
+        }
+
+        await prepare('presentation');
+        var arrowLogStart = probe.log.length;
+        var arrowNextStart = probe.nextButtonClicks;
+        var arrowPrevStart = probe.prevButtonClicks;
+        var nativeArrowStart = probe.arrowPrevious;
+        var arrowOvershootStart = probe.nextSlideMoves;
+        var arrowEvent = fire(body, 'ArrowLeft', 'ArrowLeft');
+        await wait(400);
+
+        var arrowState = harness.snapshot();
+        var arrowTrace = probe.log.slice(arrowLogStart);
+        var oldIndex = arrowTrace.findIndex(function (entry) {
+          return entry.reason === 'prev-button-old' && entry.visible === 3;
+        });
+        var resetIndex = arrowTrace.findIndex(function (entry) {
+          return entry.reason === 'prev-button-reset' && entry.visible === 0;
+        });
+        var maxIndex = arrowTrace.findIndex(function (entry) {
+          return entry.reason === 'next-button-effect' && entry.visible === 3;
+        });
+        var arrowReverseEntersLast =
+          arrowState.slide === 1 &&
+          arrowState.visible === 3 &&
+          arrowState.effects === 3;
+        var resetRaceHandled =
+          oldIndex >= 0 &&
+          resetIndex > oldIndex &&
+          maxIndex > resetIndex;
+        var arrowCatchupExact =
+          probe.nextButtonClicks - arrowNextStart === 3;
+        var arrowNoOvershoot =
+          probe.nextSlideMoves - arrowOvershootStart === 0 &&
+          arrowState.slide === 1;
+        var boundaryArrowHandledOnce =
+          arrowEvent.defaultPrevented &&
+          probe.prevButtonClicks - arrowPrevStart === 1 &&
+          probe.arrowPrevious - nativeArrowStart === 0;
+
+        var arrowStepSequence = [];
+        for (var step = 0; step < 3; step += 1) {
+          fire(body, 'ArrowLeft', 'ArrowLeft');
+          await wait(80);
+          var stepState = harness.snapshot();
+          arrowStepSequence.push(stepState.slide + ':' + stepState.visible);
+        }
+        var arrowStepsBackOneByOne =
+          arrowStepSequence.join(',') === '1:2,1:1,1:0';
+
+        await prepare('presentation');
+        var presenterNextStart = probe.nextButtonClicks;
+        var presenterPrevStart = probe.prevButtonClicks;
+        var presenterOvershootStart = probe.nextSlideMoves;
+        var presenterEvent = fire(
+          document.body,
+          'PageUp',
+          'PageUp'
+        );
+        await wait(400);
+        var presenterState = harness.snapshot();
+        var presenterPageUpEntersLast =
+          presenterEvent.defaultPrevented &&
+          presenterState.slide === 1 &&
+          presenterState.visible === 3;
+        var presenterCatchupExact =
+          probe.prevButtonClicks - presenterPrevStart === 1 &&
+          probe.nextButtonClicks - presenterNextStart === 3 &&
+          probe.nextSlideMoves - presenterOvershootStart === 0;
+
+        await prepare('presentation');
+        var buttonNextStart = probe.nextButtonClicks;
+        var buttonPrevStart = probe.prevButtonClicks;
+        var buttonOvershootStart = probe.nextSlideMoves;
+        previousButton.click();
+        await wait(400);
+        var buttonState = harness.snapshot();
+        var nativePrevEntersLast =
+          buttonState.slide === 1 &&
+          buttonState.visible === 3;
+        var nativePrevCatchupExact =
+          probe.prevButtonClicks - buttonPrevStart === 1 &&
+          probe.nextButtonClicks - buttonNextStart === 3 &&
+          probe.nextSlideMoves - buttonOvershootStart === 0;
+
+        await prepare('presentation');
+        var tocNextStart = probe.nextButtonClicks;
+        tocButton.click();
+        await wait(300);
+        var tocState = harness.snapshot();
+        var tocRemainsZero =
+          tocState.slide === 1 &&
+          tocState.visible === 0 &&
+          probe.nextButtonClicks - tocNextStart === 0;
+
+        await prepare('textbook');
+        var textbookNextStart = probe.nextButtonClicks;
+        fire(body, 'ArrowLeft', 'ArrowLeft');
+        await wait(300);
+        var textbookState = harness.snapshot();
+        var textbookDisabled =
+          textbookState.slide === 1 &&
+          textbookState.visible === 0 &&
+          probe.nextButtonClicks - textbookNextStart === 0;
+
+        await prepare('slides');
+        var slidesNextStart = probe.nextButtonClicks;
+        var slidesOvershootStart = probe.nextSlideMoves;
+        fire(body, 'ArrowLeft', 'ArrowLeft');
+        await wait(400);
+        var slidesState = harness.snapshot();
+        var slidesEnabled =
+          slidesState.slide === 1 &&
+          slidesState.visible === 3 &&
+          probe.nextButtonClicks - slidesNextStart === 3 &&
+          probe.nextSlideMoves - slidesOvershootStart === 0;
+
+        await prepare('presentation');
+        var oppositeNextStart = probe.nextButtonClicks;
+        fire(body, 'ArrowLeft', 'ArrowLeft');
+        await wait(15);
+        fire(body, 'ArrowRight', 'ArrowRight');
+        await wait(300);
+        var oppositeState = harness.snapshot();
+        var oppositeInputCancels =
+          oppositeState.slide === 2 &&
+          oppositeState.visible === 0 &&
+          probe.nextButtonClicks - oppositeNextStart === 0;
+
+        await prepare('presentation');
+        var modalPreviousStart = probe.previousActions;
+        var modalNextStart = probe.nextButtonClicks;
+        var modal = contentDocument.createElement('div');
+        modal.className = 'lia-modal';
+        body.appendChild(modal);
+        fire(body, 'ArrowLeft', 'ArrowLeft');
+        await wait(150);
+        var modalState = harness.snapshot();
+        modal.remove();
+        var modalBlocksNavigation =
+          modalState.slide === 2 &&
+          modalState.visible === 0 &&
+          probe.previousActions - modalPreviousStart === 0 &&
+          probe.nextButtonClicks - modalNextStart === 0;
+
+        await prepare('presentation');
+        var inputNextStart = probe.nextButtonClicks;
+        var inputEvent = fire(input, 'ArrowLeft', 'ArrowLeft');
+        await wait(300);
+        var inputState = harness.snapshot();
+        var inputDoesNotArmReverse =
+          !inputEvent.defaultPrevented &&
+          inputState.slide === 1 &&
+          inputState.visible === 0 &&
+          probe.nextButtonClicks - inputNextStart === 0;
+
+        await prepare('presentation', {
+          lazyTarget: true,
+          parseDelayMs: 220
+        });
+        var lazyLogStart = probe.log.length;
+        var lazyNextStart = probe.nextButtonClicks;
+        var lazyOvershootStart = probe.nextSlideMoves;
+        fire(body, 'ArrowLeft', 'ArrowLeft');
+        await wait(650);
+        var lazyState = harness.snapshot();
+        var lazyTrace = probe.log.slice(lazyLogStart);
+        var lazyUnparsedIndex = lazyTrace.findIndex(function (entry) {
+          return entry.reason === 'prev-button-unparsed' &&
+            entry.counter === '1' && entry.effects === 0;
+        });
+        var lazyParsedIndex = lazyTrace.findIndex(function (entry) {
+          return entry.reason === 'prev-button-parsed' &&
+            entry.counter === '1 (0/3)';
+        });
+        var lazyMaxIndex = lazyTrace.findIndex(function (entry) {
+          return entry.reason === 'next-button-effect' && entry.visible === 3;
+        });
+        var lazyTargetWaitsForEffects =
+          lazyState.slide === 1 &&
+          lazyState.visible === 3 &&
+          lazyState.effects === 3 &&
+          lazyUnparsedIndex >= 0 &&
+          lazyParsedIndex > lazyUnparsedIndex &&
+          lazyMaxIndex > lazyParsedIndex &&
+          probe.nextButtonClicks - lazyNextStart === 3 &&
+          probe.nextSlideMoves - lazyOvershootStart === 0;
+
+        await prepare('presentation', {
+          oldZeroBeforeReset: true
+        });
+        var oldZeroLogStart = probe.log.length;
+        var oldZeroNextStart = probe.nextButtonClicks;
+        fire(body, 'ArrowLeft', 'ArrowLeft');
+        await wait(600);
+        var oldZeroState = harness.snapshot();
+        var oldZeroTrace = probe.log.slice(oldZeroLogStart);
+        var oldZeroIndex = oldZeroTrace.findIndex(function (entry) {
+          return entry.reason === 'prev-button-old-zero' &&
+            entry.counter === '1 (0/3)';
+        });
+        var repeatedResetIndex = oldZeroTrace.findIndex(function (entry) {
+          return entry.reason === 'prev-button-reset-zero' &&
+            entry.counter === '1 (0/3)';
+        });
+        var firstNextAfterResetIndex = oldZeroTrace.findIndex(function (entry) {
+          return entry.reason === 'next-button-effect';
+        });
+        var oldZeroWaitsForReset =
+          oldZeroState.slide === 1 &&
+          oldZeroState.visible === 3 &&
+          oldZeroIndex >= 0 &&
+          repeatedResetIndex > oldZeroIndex &&
+          firstNextAfterResetIndex > repeatedResetIndex &&
+          probe.nextButtonClicks - oldZeroNextStart === 3;
+
+        await prepare('presentation', {
+          nextDelayMs: 90
+        });
+        var repeatNextStart = probe.nextButtonClicks;
+        var repeatPrevStart = probe.prevButtonClicks;
+        var repeatPreviousActionStart = probe.previousActions;
+        var repeatNativeStart = probe.arrowPrevious;
+        var repeatOvershootStart = probe.nextSlideMoves;
+        fire(body, 'ArrowLeft', 'ArrowLeft');
+        await wait(20);
+        var repeatDuringReset = fire(
+          body,
+          'ArrowLeft',
+          'ArrowLeft',
+          { repeat: true }
+        );
+        await wait(100);
+        var repeatDuringCatchup = fire(
+          body,
+          'ArrowLeft',
+          'ArrowLeft',
+          { repeat: true }
+        );
+        await wait(700);
+        var repeatState = harness.snapshot();
+        var repeatDoesNotNavigateTwice =
+          repeatDuringReset.defaultPrevented &&
+          repeatDuringCatchup.defaultPrevented &&
+          repeatState.slide === 1 &&
+          repeatState.visible === 3 &&
+          probe.prevButtonClicks - repeatPrevStart === 1 &&
+          probe.previousActions - repeatPreviousActionStart === 1 &&
+          probe.arrowPrevious - repeatNativeStart === 0 &&
+          probe.nextButtonClicks - repeatNextStart === 3 &&
+          probe.nextSlideMoves - repeatOvershootStart === 0;
+
+        await prepare('presentation', {
+          modalAfterFirstNext: true
+        });
+        var lateModalNextStart = probe.nextButtonClicks;
+        var lateModalPrevStart = probe.prevButtonClicks;
+        fire(body, 'ArrowLeft', 'ArrowLeft');
+        await wait(500);
+        var lateModalState = harness.snapshot();
+        var lateModal = contentDocument.querySelector(
+          '[data-reverse-harness-modal]'
+        );
+        var modalDuringCatchupCancels =
+          !!lateModal &&
+          lateModalState.slide === 1 &&
+          lateModalState.visible === 1 &&
+          probe.prevButtonClicks - lateModalPrevStart === 1 &&
+          probe.nextButtonClicks - lateModalNextStart === 1;
+
+        await prepare('presentation', {
+          disableNextButton: true
+        });
+        var disabledNextStart = probe.nextButtonClicks;
+        fire(body, 'ArrowLeft', 'ArrowLeft');
+        await wait(2800);
+        var disabledTimedOutState = harness.snapshot();
+        harness.enableNextAndPulse();
+        harness.showDirectTarget();
+        await wait(300);
+        var disabledLaterState = harness.snapshot();
+        var disabledNextTimesOutSafely =
+          disabledTimedOutState.slide === 1 &&
+          disabledTimedOutState.visible === 0 &&
+          disabledLaterState.slide === 1 &&
+          disabledLaterState.visible === 0 &&
+          probe.nextButtonClicks - disabledNextStart === 0;
+
+        var metrics = {
+          arrowReverseEntersLast: arrowReverseEntersLast,
+          resetRaceHandled: resetRaceHandled,
+          boundaryArrowHandledOnce: boundaryArrowHandledOnce,
+          arrowCatchupExact: arrowCatchupExact,
+          arrowNoOvershoot: arrowNoOvershoot,
+          arrowStepsBackOneByOne: arrowStepsBackOneByOne,
+          presenterPageUpEntersLast: presenterPageUpEntersLast,
+          presenterCatchupExact: presenterCatchupExact,
+          nativePrevEntersLast: nativePrevEntersLast,
+          nativePrevCatchupExact: nativePrevCatchupExact,
+          tocRemainsZero: tocRemainsZero,
+          textbookDisabled: textbookDisabled,
+          slidesEnabled: slidesEnabled,
+          oppositeInputCancels: oppositeInputCancels,
+          modalBlocksNavigation: modalBlocksNavigation,
+          inputDoesNotArmReverse: inputDoesNotArmReverse,
+          lazyTargetWaitsForEffects: lazyTargetWaitsForEffects,
+          oldZeroWaitsForReset: oldZeroWaitsForReset,
+          repeatDoesNotNavigateTwice: repeatDoesNotNavigateTwice,
+          modalDuringCatchupCancels: modalDuringCatchupCancels,
+          disabledNextTimesOutSafely: disabledNextTimesOutSafely,
+          arrowStepSequence: arrowStepSequence,
+          arrowTrace: arrowTrace,
+          lazyTrace: lazyTrace,
+          oldZeroTrace: oldZeroTrace,
+          totalNextButtonClicks: probe.nextButtonClicks,
+          totalPrevButtonClicks: probe.prevButtonClicks,
+          totalPreviousActions: probe.previousActions,
+          totalNextActions: probe.nextActions,
+          nextSlideMoves: probe.nextSlideMoves,
+          tocClicks: probe.tocClicks
+        };
+        var pass = Object.keys(metrics).every(function (key) {
+          return typeof metrics[key] !== 'boolean' || metrics[key];
+        });
+
+        document.body.setAttribute(
+          'data-reverse-navigation-test',
+          pass ? 'pass' : 'fail'
+        );
+        result.textContent = JSON.stringify(
+          Object.assign({ pass: pass }, metrics)
+        );
+      } catch (error) {
+        document.body.setAttribute('data-reverse-navigation-test', 'fail');
+        result.textContent = JSON.stringify({
+          pass: false,
+          error: error && error.stack ? error.stack : String(error)
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

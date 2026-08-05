@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang='de'>
+<head>
+  <meta charset='utf-8' />
+  <meta name='viewport' content='width=device-width, initial-scale=1' />
+  <title>Board Mode Autoscrolling Preview Test</title>
+  <style>
+    html, body { height: 100%; margin: 0; overflow: hidden; }
+    body { font-family: sans-serif; }
+    .lia-slide__container { height: 100vh; overflow-y: auto; }
+    main { min-height: 180vh; padding: 16px; }
+    #autoscrolling-result {
+      position: fixed;
+      right: 8px;
+      bottom: 8px;
+      z-index: 10;
+      max-width: min(640px, calc(100vw - 16px));
+      padding: 8px;
+      background: white;
+      border: 1px solid #777;
+      font: 12px/1.35 monospace;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class='lia-slide__container' id='slide-scroller'>
+    <main class='lia-slide__content' id='slide-default'>
+      <h1>Standardverhalten vor dem ersten Makro</h1>
+      <p id='focused'>Simulierter Animationsschritt ohne voriges Makro</p>
+    </main>
+    <main class='lia-slide__content' id='slide-off' hidden>
+      <h1>Autoscrolling aus</h1>
+      <p id='first-focus'>Simulierter LiaScript-Animationsschritt</p>
+      <p id='focusedToc'>Anderes LiaScript-Scrollziel</p>
+    </main>
+    <main class='lia-slide__content' id='slide-inherited' hidden>
+      <h1>Geerbtes Autoscrolling aus</h1>
+      <p id='second-focus'>Zweiter simulierter Animationsschritt</p>
+    </main>
+    <main class='lia-slide__content' id='slide-on' hidden>
+      <h1>Autoscrolling wieder an</h1>
+      <p id='third-focus'>Dritter simulierter Animationsschritt</p>
+    </main>
+    <main class='lia-slide__content' id='slide-after-on' hidden>
+      <h1>Geerbtes Autoscrolling an</h1>
+      <p id='fourth-focus'>Vierter simulierter Animationsschritt</p>
+    </main>
+  </div>
+  <pre id='autoscrolling-result'>running</pre>
+
+  <script>
+    localStorage.setItem('settings', JSON.stringify({ mode: 'presentation' }));
+
+    const nativeCalls = [];
+    Element.prototype.scrollIntoView = function () {
+      nativeCalls.push(this.id || this.tagName);
+      document.getElementById('slide-scroller').scrollTop = 500;
+    };
+  </script>
+  <script src='../dist/index.js?t=autoscrolling-course-cache'></script>
+  <script>
+    (async function runAutoscrollingTest() {
+      const waitForTick = () => new Promise(resolve => setTimeout(resolve, 100));
+      const scroller = document.getElementById('slide-scroller');
+      const defaultSlide = document.getElementById('slide-default');
+      const firstSlide = document.getElementById('slide-off');
+      const inheritedSlide = document.getElementById('slide-inherited');
+      const thirdSlide = document.getElementById('slide-on');
+      const fourthSlide = document.getElementById('slide-after-on');
+      const defaultFocus = document.getElementById('focused');
+      const firstFocus = document.getElementById('first-focus');
+      const inheritedFocus = document.getElementById('second-focus');
+      const thirdFocus = document.getElementById('third-focus');
+      const fourthFocus = document.getElementById('fourth-focus');
+      const tocTarget = document.getElementById('focusedToc');
+      const result = document.getElementById('autoscrolling-result');
+      const makeMarker = value => {
+        const marker = document.createElement('div');
+        marker.hidden = true;
+        marker.setAttribute('aria-hidden', 'true');
+        marker.setAttribute('data-lia-tff-autoscrolling', value);
+        return marker;
+      };
+
+      await waitForTick();
+      scroller.scrollTop = 25;
+      defaultFocus.scrollIntoView({ behavior: 'smooth' });
+      const defaultOn = scroller.scrollTop > 25 && nativeCalls.filter(id => id === 'focused').length === 1;
+
+      defaultSlide.hidden = true;
+      defaultFocus.removeAttribute('id');
+      const marker = makeMarker('off');
+      firstSlide.prepend(marker);
+      firstSlide.hidden = false;
+      firstFocus.id = 'focused';
+      await waitForTick();
+      scroller.scrollTop = 25;
+      firstFocus.scrollIntoView({ behavior: 'smooth' });
+      const offBlocked = scroller.scrollTop === 25 && nativeCalls.filter(id => id === 'focused').length === 1;
+
+      tocTarget.scrollIntoView({ behavior: 'smooth' });
+      const unrelatedAllowed = scroller.scrollTop > 25 && nativeCalls.at(-1) === 'focusedToc';
+
+      marker.setAttribute('data-lia-tff-autoscrolling', 'on');
+      scroller.scrollTop = 25;
+      firstFocus.scrollIntoView({ behavior: 'smooth' });
+      const onAllowed = scroller.scrollTop > 25 && nativeCalls.filter(id => id === 'focused').length === 2;
+
+      marker.setAttribute('data-lia-tff-autoscrolling', 'off');
+      firstFocus.removeAttribute('id');
+      const replacement = document.createElement('p');
+      replacement.id = 'focused';
+      replacement.textContent = 'Neu gerenderter Animationsschritt';
+      firstSlide.appendChild(replacement);
+      await waitForTick();
+      scroller.scrollTop = 25;
+      replacement.scrollIntoView({ behavior: 'smooth' });
+      const newTargetBlocked = scroller.scrollTop === 25 && nativeCalls.filter(id => id === 'focused').length === 2;
+
+      delete replacement.scrollIntoView;
+      replacement.toggleAttribute('data-trigger-repatch');
+      await waitForTick();
+      scroller.scrollTop = 25;
+      replacement.scrollIntoView({ behavior: 'smooth' });
+      const overwrittenGuardRestored = scroller.scrollTop === 25 && nativeCalls.filter(id => id === 'focused').length === 2;
+
+      firstSlide.hidden = true;
+      marker.remove();
+      replacement.removeAttribute('id');
+      inheritedSlide.hidden = false;
+      inheritedFocus.id = 'focused';
+      await waitForTick();
+      scroller.scrollTop = 25;
+      inheritedFocus.scrollIntoView({ behavior: 'smooth' });
+      const inheritedOffAfterUnmount =
+        scroller.scrollTop === 25 && nativeCalls.filter(id => id === 'focused').length === 2;
+
+      inheritedSlide.hidden = true;
+      inheritedFocus.removeAttribute('id');
+      const onMarker = makeMarker('on');
+      thirdSlide.prepend(onMarker);
+      thirdSlide.hidden = false;
+      thirdFocus.id = 'focused';
+      await waitForTick();
+      scroller.scrollTop = 25;
+      thirdFocus.scrollIntoView({ behavior: 'smooth' });
+      const explicitOn = scroller.scrollTop > 25 && nativeCalls.filter(id => id === 'focused').length === 3;
+
+      thirdSlide.hidden = true;
+      onMarker.remove();
+      thirdFocus.removeAttribute('id');
+      fourthSlide.hidden = false;
+      fourthFocus.id = 'focused';
+      await waitForTick();
+      scroller.scrollTop = 25;
+      fourthFocus.scrollIntoView({ behavior: 'smooth' });
+      const inheritedOnAfterUnmount =
+        scroller.scrollTop > 25 && nativeCalls.filter(id => id === 'focused').length === 4;
+
+      fourthSlide.hidden = true;
+      fourthFocus.removeAttribute('id');
+      inheritedSlide.hidden = false;
+      inheritedFocus.id = 'focused';
+      await waitForTick();
+      scroller.scrollTop = 25;
+      inheritedFocus.scrollIntoView({ behavior: 'smooth' });
+      const backNavigationUsesCoursePosition =
+        scroller.scrollTop === 25 && nativeCalls.filter(id => id === 'focused').length === 4;
+
+      const metrics = {
+        defaultOn,
+        offBlocked,
+        unrelatedAllowed,
+        onAllowed,
+        newTargetBlocked,
+        overwrittenGuardRestored,
+        inheritedOffAfterUnmount,
+        explicitOn,
+        inheritedOnAfterUnmount,
+        backNavigationUsesCoursePosition,
+        nativeCalls
+      };
+      const pass = defaultOn && offBlocked && unrelatedAllowed && onAllowed &&
+        newTargetBlocked && overwrittenGuardRestored && inheritedOffAfterUnmount &&
+        explicitOn && inheritedOnAfterUnmount && backNavigationUsesCoursePosition;
+      document.body.dataset.autoscrollingTest = pass ? 'pass' : 'fail';
+      result.textContent = JSON.stringify({ pass, ...metrics });
+    })();
+  </script>
+</body>
+</html>
