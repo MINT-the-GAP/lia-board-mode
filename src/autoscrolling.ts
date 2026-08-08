@@ -138,9 +138,9 @@ function guardTarget(target: HTMLElement): void {
     this: HTMLElement,
     arg?: boolean | ScrollIntoViewOptions
   ): void {
-    const activeMain = this.closest('main:not([hidden])');
+    const activeMain = this.closest('main:not([hidden])') ||
+      activeSlide(this.ownerDocument);
     if (
-      this.id === 'focused' &&
       activeMain &&
       !settingForCoursePosition(this.ownerDocument, activeMain)
     ) return;
@@ -167,8 +167,10 @@ function guardTarget(target: HTMLElement): void {
 }
 
 /**
- * Guards only the active LiaScript effect target. The last seen macro on the
- * current or a preceding slide defines the course-wide state at that point.
+ * Guards every element seen as an active LiaScript effect target. The guard
+ * stays attached after focus moves because a delayed scroll may retain the
+ * stale element reference. The last seen macro on the current or a preceding
+ * slide defines the course-wide state at that point.
  * LiaScript assigns the id `focused` before scheduling its automatic scroll,
  * so the existing mutation observer installs the guard before it runs.
  */

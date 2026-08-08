@@ -82,6 +82,32 @@
         marker.setAttribute('data-lia-tff-autoscrolling', value);
         return marker;
       };
+      const scheduleLiaEffectScroll = () => {
+        // A zero-delay task stands in for each animation frame. The race only
+        // depends on the target being retained across two deferred callbacks,
+        // and this keeps the self-check deterministic in headless browsers.
+        const scheduleFrame = callback => setTimeout(callback, 0);
+        let capturedResolve;
+        const captured = new Promise(resolve => { capturedResolve = resolve; });
+        const done = new Promise(resolve => {
+          setTimeout(() => {
+            const target = Array.from(document.querySelectorAll('#focused'))
+              .find(element => element.closest('main:not([hidden])')) || null;
+            capturedResolve(target);
+            if (!target) {
+              resolve();
+              return;
+            }
+            scheduleFrame(() => {
+              scheduleFrame(() => {
+                target.scrollIntoView({ behavior: 'smooth' });
+                resolve();
+              });
+            });
+          }, 0);
+        });
+        return { captured, done };
+      };
 
       await waitForTick();
       scroller.scrollTop = 25;
@@ -98,6 +124,26 @@
       scroller.scrollTop = 25;
       firstFocus.scrollIntoView({ behavior: 'smooth' });
       const offBlocked = scroller.scrollTop === 25 && nativeCalls.filter(id => id === 'focused').length === 1;
+
+      // LiaScript captures the current target after its delay, then scrolls it
+      // two animation frames later. Moving on during that gap must not let the
+      // stale target bypass the guard merely because it lost the focused id.
+      scroller.scrollTop = 25;
+      const nativeCallsBeforeStaleScroll = nativeCalls.length;
+      const scheduledScroll = scheduleLiaEffectScroll();
+      const capturedTarget = await scheduledScroll.captured;
+      firstFocus.removeAttribute('id');
+      const fastNextFocus = document.createElement('p');
+      fastNextFocus.id = 'focused';
+      fastNextFocus.textContent = 'Schnell weitergeklickter Animationsschritt';
+      firstSlide.appendChild(fastNextFocus);
+      await scheduledScroll.done;
+      const staleScheduledTargetBlocked =
+        capturedTarget === firstFocus &&
+        scroller.scrollTop === 25 &&
+        nativeCalls.length === nativeCallsBeforeStaleScroll;
+      fastNextFocus.remove();
+      firstFocus.id = 'focused';
 
       tocTarget.scrollIntoView({ behavior: 'smooth' });
       const unrelatedAllowed = scroller.scrollTop > 25 && nativeCalls.at(-1) === 'focusedToc';
@@ -125,11 +171,20 @@
       replacement.scrollIntoView({ behavior: 'smooth' });
       const overwrittenGuardRestored = scroller.scrollTop === 25 && nativeCalls.filter(id => id === 'focused').length === 2;
 
+      scroller.scrollTop = 25;
+      const nativeCallsBeforeStaleSlideScroll = nativeCalls.length;
+      const scheduledSlideScroll = scheduleLiaEffectScroll();
+      const capturedSlideTarget = await scheduledSlideScroll.captured;
       firstSlide.hidden = true;
       marker.remove();
       replacement.removeAttribute('id');
       inheritedSlide.hidden = false;
       inheritedFocus.id = 'focused';
+      await scheduledSlideScroll.done;
+      const staleScheduledSlideTargetBlocked =
+        capturedSlideTarget === replacement &&
+        scroller.scrollTop === 25 &&
+        nativeCalls.length === nativeCallsBeforeStaleSlideScroll;
       await waitForTick();
       scroller.scrollTop = 25;
       inheritedFocus.scrollIntoView({ behavior: 'smooth' });
@@ -171,18 +226,22 @@
       const metrics = {
         defaultOn,
         offBlocked,
+        staleScheduledTargetBlocked,
         unrelatedAllowed,
         onAllowed,
         newTargetBlocked,
         overwrittenGuardRestored,
+        staleScheduledSlideTargetBlocked,
         inheritedOffAfterUnmount,
         explicitOn,
         inheritedOnAfterUnmount,
         backNavigationUsesCoursePosition,
         nativeCalls
       };
-      const pass = defaultOn && offBlocked && unrelatedAllowed && onAllowed &&
-        newTargetBlocked && overwrittenGuardRestored && inheritedOffAfterUnmount &&
+      const pass = defaultOn && offBlocked && staleScheduledTargetBlocked &&
+        unrelatedAllowed && onAllowed &&
+        newTargetBlocked && overwrittenGuardRestored &&
+        staleScheduledSlideTargetBlocked && inheritedOffAfterUnmount &&
         explicitOn && inheritedOnAfterUnmount && backNavigationUsesCoursePosition;
       document.body.dataset.autoscrollingTest = pass ? 'pass' : 'fail';
       result.textContent = JSON.stringify({ pass, ...metrics });
