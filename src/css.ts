@@ -138,14 +138,15 @@ html[data-lia-mode="presentation"] main,
 html[data-lia-mode="slides"] main{
   box-sizing: border-box !important;
 
+  /* LiaScript shrinks its canvas while the TOC or another side panel is open. */
   width: min(
     var(--lia-tff-maxw),
-    calc(100vw - var(--lia-tff-left-gap) - var(--lia-tff-right-gap))
+    calc(100% - var(--lia-tff-left-gap) - var(--lia-tff-right-gap))
   ) !important;
 
   max-width: min(
     var(--lia-tff-maxw),
-    calc(100vw - var(--lia-tff-left-gap) - var(--lia-tff-right-gap))
+    calc(100% - var(--lia-tff-left-gap) - var(--lia-tff-right-gap))
   ) !important;
 
   margin-left: var(--lia-tff-left-gap) !important;

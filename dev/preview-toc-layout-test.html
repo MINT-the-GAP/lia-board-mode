@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Board Mode TOC Layout Test</title>
+  <style>
+    :root { --color-highlight: 11, 95, 255; }
+    html, body { height: 100%; margin: 0; overflow: hidden; }
+    body { font-family: sans-serif; }
+
+    /* Mirrors LiaScript's desktop canvas/TOC geometry. */
+    .lia-toc {
+      position: fixed;
+      inset: 0 auto 0 0;
+      width: 285px;
+      background: #eee;
+    }
+    .lia-canvas {
+      position: relative;
+      left: 0;
+      width: 100%;
+      height: 100vh;
+      overflow: hidden;
+    }
+    .lia-canvas.lia-toc--visible {
+      left: 285px;
+      width: calc(100% - 285px);
+    }
+    .lia-header__left {
+      display: flex;
+      height: 48px;
+      align-items: center;
+    }
+    .lia-slide__container { width: 100%; }
+    main.lia-slide__content {
+      box-sizing: border-box;
+      width: 100%;
+      max-width: 1246px;
+      padding: 0 30px;
+    }
+    #result {
+      position: fixed;
+      right: 8px;
+      bottom: 8px;
+      z-index: 1000;
+      max-width: calc(100vw - 16px);
+      background: white;
+      border: 1px solid #777;
+      font: 12px/1.35 monospace;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <aside id="lia-toc" class="lia-toc lia-toc--open">TOC</aside>
+  <div id="canvas" class="lia-canvas lia-toc--visible lia-mode--presentation">
+    <header id="lia-toolbar-nav">
+      <div class="lia-header__left">
+        <button id="lia-btn-toc" class="lia-btn" aria-label="Inhaltsverzeichnis">TOC</button>
+      </div>
+    </header>
+    <div class="lia-slide__container">
+      <main id="content" class="lia-slide__content">
+        <h1>TOC-Breitentest</h1>
+        <p>Der Inhalt muss innerhalb des verkleinerten Canvas bleiben.</p>
+      </main>
+    </div>
+  </div>
+
+  <output id="result">pending</output>
+
+  <script>
+    localStorage.setItem('settings', JSON.stringify({ mode: 'presentation', language: 'de' }));
+    // Headless --dump-dom does not consistently advance compositor frames.
+    window.requestAnimationFrame = function (callback) {
+      return window.setTimeout(function () { callback(performance.now()); }, 0);
+    };
+    window.cancelAnimationFrame = window.clearTimeout;
+  </script>
+  <script src="../dist/index.js?t=toc-layout"></script>
+  <script>
+    setTimeout(function () {
+      var canvas = document.getElementById('canvas');
+      var content = document.getElementById('content');
+
+      function measure(label) {
+        var canvasRect = canvas.getBoundingClientRect();
+        var contentRect = content.getBoundingClientRect();
+        var style = getComputedStyle(content);
+        var marginLeft = parseFloat(style.marginLeft) || 0;
+        var marginRight = parseFloat(style.marginRight) || 0;
+        var fits =
+          contentRect.left >= canvasRect.left - 1 &&
+          contentRect.right <= canvasRect.right + 1;
+        var fillsAvailableWidth = Math.abs(
+          contentRect.width + marginLeft + marginRight - canvasRect.width
+        ) <= 1;
+
+        return {
+          label: label,
+          canvasLeft: canvasRect.left,
+          canvasRight: canvasRect.right,
+          canvasWidth: canvasRect.width,
+          contentLeft: contentRect.left,
+          contentRight: contentRect.right,
+          contentWidth: contentRect.width,
+          marginLeft: marginLeft,
+          marginRight: marginRight,
+          fits: fits,
+          fillsAvailableWidth: fillsAvailableWidth
+        };
+      }
+
+      var open = measure('open');
+      canvas.classList.remove('lia-toc--visible');
+      var closed = measure('closed');
+      canvas.classList.add('lia-toc--visible');
+      var reopened = measure('reopened');
+      var stylePresent = Boolean(document.getElementById('lia-tff-style-content-v2'));
+      var pass = stylePresent &&
+        open.fits && open.fillsAvailableWidth &&
+        closed.fits && closed.fillsAvailableWidth &&
+        reopened.fits && reopened.fillsAvailableWidth;
+
+      var details = {
+        pass: pass,
+        stylePresent: stylePresent,
+        viewportWidth: innerWidth,
+        open: open,
+        closed: closed,
+        reopened: reopened
+      };
+      document.body.dataset.tocLayoutTest = pass ? 'pass' : 'fail';
+      document.getElementById('result').textContent = JSON.stringify(details);
+    }, 300);
+  </script>
+</body>
+</html>
