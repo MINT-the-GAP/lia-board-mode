@@ -5,6 +5,7 @@ import { positionOverlayButton, positionPanel } from "./ui";
 import { getToolbarHeader } from "./toolbar";
 import { setPresFontPx } from "./font";
 import { clamp } from "./state";
+import { isEditableKeyboardEvent } from "./keyboard";
 
 function runPositionNow(): void {
   positionOverlayButton();
@@ -64,6 +65,7 @@ export function wireOnce(): void {
   }, true);
 
   ROOT_DOC.addEventListener("keydown", (e) => {
+    if (isEditableKeyboardEvent(e)) return;
     if (e.key === "Escape") {
       ROOT_DOC.body.classList.remove("lia-tff-panel-open");
     }

@@ -3,6 +3,7 @@
 import { CONTENT_DOC, ROOT_DOC } from './state';
 import { detectMode } from './mode';
 import { armReverseEntry, cancelReverseEntry } from './reverseNavigation';
+import { eventPathMatches, isEditableKeyboardEvent } from './keyboard';
 
 export const PRESENTER_BLACKOUT_ID = 'lia-tff-presenter-blackout-v1';
 
@@ -131,18 +132,6 @@ function actionFor(event: KeyboardEvent): PresenterAction | null {
   return null;
 }
 
-function blockedTarget(target: EventTarget | null): boolean {
-  const candidate = target as Element | null;
-  if (!candidate || typeof candidate.closest !== 'function') return false;
-
-  return !!candidate.closest(
-    'input, textarea, select, option, ' +
-    '[contenteditable]:not([contenteditable=false]), [role=textbox], ' +
-    '.ace_editor, .monaco-editor, .CodeMirror, .cm-editor, ' +
-    'dialog, [role=dialog], .lia-modal'
-  );
-}
-
 function blockingModalOpen(): boolean {
   return documents().some(doc => !!doc.querySelector(
     '.lia-modal, dialog[open], [role=dialog][aria-modal=true]'
@@ -177,6 +166,8 @@ function triggerNavigation(id: string): boolean {
 }
 
 function handlePresenterKey(event: KeyboardEvent): void {
+  if (isEditableKeyboardEvent(event)) return;
+
   const action = actionFor(event);
   if (!action) return;
 
@@ -184,7 +175,10 @@ function handlePresenterKey(event: KeyboardEvent): void {
     (action === 'toggle-blackout' || action === 'close-blackout');
 
   if (action !== 'close-blackout' && !presenterMode(currentMode())) return;
-  if (!closingBlackout && (blockedTarget(event.target) || blockingModalOpen())) {
+  if (!closingBlackout && (
+    eventPathMatches(event, 'dialog, [role=dialog], .lia-modal') ||
+    blockingModalOpen()
+  )) {
     return;
   }
 

@@ -353,6 +353,12 @@
         var probe = harness.probe;
         var body = contentDocument.body;
         var input = contentDocument.getElementById('editor-input');
+        var shadowHost = contentDocument.createElement('div');
+        var shadowRoot = shadowHost.attachShadow({ mode: 'open' });
+        var shadowTextarea = contentDocument.createElement('textarea');
+        shadowTextarea.id = 'shadow-textarea';
+        shadowRoot.appendChild(shadowTextarea);
+        body.appendChild(shadowHost);
         var previousButton = contentDocument.getElementById('lia-btn-prev');
         var tocButton = contentDocument.getElementById('toc-slide-one');
 
@@ -361,6 +367,7 @@
           var event = new view.KeyboardEvent('keydown', Object.assign({
             bubbles: true,
             cancelable: true,
+            composed: true,
             key: key,
             code: code,
             repeat: false
@@ -545,6 +552,25 @@
           inputState.visible === 0 &&
           probe.nextButtonClicks - inputNextStart === 0;
 
+        await prepare('presentation');
+        var shadowNextStart = probe.nextButtonClicks;
+        var shadowPrevStart = probe.prevButtonClicks;
+        var shadowNativeStart = probe.arrowPrevious;
+        var shadowEvent = fire(
+          shadowTextarea,
+          'ArrowLeft',
+          'ArrowLeft'
+        );
+        await wait(300);
+        var shadowState = harness.snapshot();
+        var shadowTextareaDoesNotArmReverse =
+          !shadowEvent.defaultPrevented &&
+          shadowState.slide === 1 &&
+          shadowState.visible === 0 &&
+          probe.nextButtonClicks - shadowNextStart === 0 &&
+          probe.prevButtonClicks - shadowPrevStart === 0 &&
+          probe.arrowPrevious - shadowNativeStart === 1;
+
         await prepare('presentation', {
           lazyTarget: true,
           parseDelayMs: 220
@@ -694,6 +720,7 @@
           oppositeInputCancels: oppositeInputCancels,
           modalBlocksNavigation: modalBlocksNavigation,
           inputDoesNotArmReverse: inputDoesNotArmReverse,
+          shadowTextareaDoesNotArmReverse: shadowTextareaDoesNotArmReverse,
           lazyTargetWaitsForEffects: lazyTargetWaitsForEffects,
           oldZeroWaitsForReset: oldZeroWaitsForReset,
           repeatDoesNotNavigateTwice: repeatDoesNotNavigateTwice,

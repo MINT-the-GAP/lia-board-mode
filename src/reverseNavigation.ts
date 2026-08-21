@@ -2,6 +2,7 @@
 
 import { CONTENT_DOC, ROOT_DOC, ROOT_WIN } from './state';
 import { detectMode } from './mode';
+import { isEditableKeyboardEvent } from './keyboard';
 
 const NEXT_BUTTON_ID = 'lia-btn-next';
 const PREVIOUS_BUTTON_ID = 'lia-btn-prev';
@@ -132,17 +133,6 @@ function schedulePoll(): void {
   }, POLL_INTERVAL_MS);
 }
 
-function blockedTarget(target: EventTarget | null): boolean {
-  const candidate = target as Element | null;
-  if (!candidate || typeof candidate.closest !== 'function') return false;
-
-  return !!candidate.closest(
-    'input, textarea, select, option, ' +
-    '[contenteditable]:not([contenteditable=false]), [role=textbox], ' +
-    '.ace_editor, .monaco-editor, .CodeMirror, .cm-editor'
-  );
-}
-
 function blockingModalOpen(): boolean {
   return documents().some(doc => !!doc.querySelector(
     '.lia-modal, dialog[open], [role=dialog][aria-modal=true]'
@@ -194,6 +184,8 @@ function triggerPrevious(state: NavigationState): boolean {
 }
 
 function handleNavigationKey(event: KeyboardEvent): void {
+  if (event.isComposing || isEditableKeyboardEvent(event)) return;
+
   const key = String(event.key || '');
   const lowerKey = key.toLowerCase();
   const plainArrowPrevious =
@@ -212,11 +204,7 @@ function handleNavigationKey(event: KeyboardEvent): void {
     cancelReverseEntry();
     return;
   }
-  if (
-    event.isComposing ||
-    blockedTarget(event.target) ||
-    blockingModalOpen()
-  ) return;
+  if (blockingModalOpen()) return;
   if (plainArrowPrevious && event.repeat && pending) {
     event.preventDefault();
     event.stopImmediatePropagation();

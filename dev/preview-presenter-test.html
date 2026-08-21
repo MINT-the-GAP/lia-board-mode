@@ -48,6 +48,7 @@
         '<button id=\'lia-btn-next\' type=\'button\'>Weiter</button>' +
         '</nav>' +
         '<input id=\'editor-input\' value=\'Text\' />' +
+        '<select id=\'editor-select\'><option>Auswahl</option></select>' +
         '<div id=\'editable\' contenteditable=\'true\'><span id=\'editable-child\'>Editierbar</span></div>' +
         '<div id=\'textbox\' role=\'textbox\'>Textbox</div>' +
         '<p id=\'event-target\'>Presenter-Ziel</p>' +
@@ -85,12 +86,22 @@
       const probe = contentWindow.presenterProbe;
       const body = contentDocument.body;
       const input = contentDocument.getElementById('editor-input');
+      const select = contentDocument.getElementById('editor-select');
+      const editableChild = contentDocument.getElementById('editable-child');
+      const textbox = contentDocument.getElementById('textbox');
+      const shadowHost = contentDocument.createElement('div');
+      const shadowRoot = shadowHost.attachShadow({ mode: 'open' });
+      const shadowTextarea = contentDocument.createElement('textarea');
+      shadowTextarea.id = 'shadow-textarea';
+      shadowRoot.appendChild(shadowTextarea);
+      body.appendChild(shadowHost);
 
       function fire(target, type, key, code, options) {
         const view = target.ownerDocument.defaultView;
         const event = new view.KeyboardEvent(type, Object.assign({
           bubbles: true,
           cancelable: true,
+          composed: true,
           key,
           code,
           repeat: false
@@ -136,23 +147,85 @@
         probe.next === 2 && !modified.defaultPrevented;
 
       const inputPage = fire(input, 'keydown', 'PageDown', 'PageDown');
-      const inputPeriod = fire(input, 'keydown', '.', 'Period');
-      const inputB = fire(input, 'keydown', 'b', 'KeyB');
       const inputIgnored =
         probe.next === 2 &&
-        !inputPage.defaultPrevented &&
-        !inputPeriod.defaultPrevented &&
-        !inputB.defaultPrevented &&
-        !document.documentElement.hasAttribute('data-lia-tff-presenter-blackout');
+        !inputPage.defaultPrevented;
 
-      const editableChild = contentDocument.getElementById('editable-child');
-      const textbox = contentDocument.getElementById('textbox');
       const editablePage = fire(editableChild, 'keydown', 'PageDown', 'PageDown');
       const textboxPage = fire(textbox, 'keydown', 'PageDown', 'PageDown');
       const editableIgnored =
         probe.next === 2 &&
         !editablePage.defaultPrevented &&
         !textboxPage.defaultPrevented;
+
+      function blackoutActive() {
+        return document.documentElement.hasAttribute(
+          'data-lia-tff-presenter-blackout'
+        );
+      }
+
+      function setBlackout(active) {
+        if (blackoutActive() === active) return true;
+        const event = fire(body, 'keydown', '.', 'Period');
+        return event.defaultPrevented && blackoutActive() === active;
+      }
+
+      function editableBlackoutShortcutsUntouched(target, active) {
+        const prepared = setBlackout(active);
+        const bubbledBefore = probe.bubbled;
+        const shortcuts = [
+          ['b', 'KeyB', {}],
+          ['B', 'KeyB', { shiftKey: true }],
+          ['.', 'Period', {}]
+        ];
+        const results = shortcuts.map(([key, code, options]) => {
+          const event = fire(target, 'keydown', key, code, options);
+          return { event, state: blackoutActive() };
+        });
+        const passed =
+          prepared &&
+          results.every(({ event, state }) =>
+            !event.defaultPrevented && state === active
+          ) &&
+          probe.bubbled === bubbledBefore + results.length;
+        setBlackout(false);
+        return passed;
+      }
+
+      const inputBlackoutOffIgnored =
+        editableBlackoutShortcutsUntouched(input, false);
+      const inputBlackoutOnIgnored =
+        editableBlackoutShortcutsUntouched(input, true);
+      const selectBlackoutOffIgnored =
+        editableBlackoutShortcutsUntouched(select, false);
+      const selectBlackoutOnIgnored =
+        editableBlackoutShortcutsUntouched(select, true);
+      const contenteditableBlackoutOffIgnored =
+        editableBlackoutShortcutsUntouched(editableChild, false);
+      const contenteditableBlackoutOnIgnored =
+        editableBlackoutShortcutsUntouched(editableChild, true);
+      const shadowTextareaBlackoutOffIgnored =
+        editableBlackoutShortcutsUntouched(shadowTextarea, false);
+      const shadowTextareaBlackoutOnIgnored =
+        editableBlackoutShortcutsUntouched(shadowTextarea, true);
+
+      function outsideBlackoutShortcutWorks(key, code, options) {
+        const prepared = setBlackout(false);
+        const on = fire(body, 'keydown', key, code, options);
+        const enabled = on.defaultPrevented && blackoutActive();
+        const off = fire(body, 'keydown', key, code, options);
+        return prepared &&
+          enabled &&
+          off.defaultPrevented &&
+          !blackoutActive();
+      }
+
+      const lowercaseBOutsideWorks =
+        outsideBlackoutShortcutWorks('b', 'KeyB');
+      const uppercaseBOutsideWorks =
+        outsideBlackoutShortcutWorks('B', 'KeyB', { shiftKey: true });
+      const periodOutsideWorks =
+        outsideBlackoutShortcutWorks('.', 'Period');
 
       const modal = contentDocument.createElement('div');
       modal.className = 'lia-modal';
@@ -285,6 +358,17 @@
         modifierIgnored,
         inputIgnored,
         editableIgnored,
+        inputBlackoutOffIgnored,
+        inputBlackoutOnIgnored,
+        selectBlackoutOffIgnored,
+        selectBlackoutOnIgnored,
+        contenteditableBlackoutOffIgnored,
+        contenteditableBlackoutOnIgnored,
+        shadowTextareaBlackoutOffIgnored,
+        shadowTextareaBlackoutOnIgnored,
+        lowercaseBOutsideWorks,
+        uppercaseBOutsideWorks,
+        periodOutsideWorks,
         modalBlocksNavigation,
         disabledButtonRespected,
         inertButtonRespected,
