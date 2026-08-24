@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang='de'>
+<head>
+  <meta charset='utf-8' />
+  <meta name='viewport' content='width=device-width, initial-scale=1' />
+  <title>Board Mode Header Collapse Test</title>
+  <style>
+    :root { --color-highlight: 11, 95, 255; }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      min-width: 1100px;
+      margin: 0;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: sans-serif;
+      background: #f4f5f7;
+    }
+
+    .lia-slide {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .lia-slide {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .lia-slide > header#lia-toolbar-nav {
+      box-sizing: border-box;
+      position: fixed;
+      inset: 0 0 auto 0;
+      z-index: 100;
+      flex: 0 0 auto;
+      width: 100%;
+      height: 56px;
+      min-height: 56px;
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid #adb3bc;
+      background: #fff;
+      opacity: 1;
+    }
+
+    .lia-header__left {
+      box-sizing: border-box;
+      width: 100%;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 12px;
+    }
+
+    .lia-btn {
+      box-sizing: border-box;
+      height: 36px;
+      padding: 0 12px;
+      border: 0;
+      border-radius: 6px;
+      background: rgb(11, 95, 255);
+      color: #fff;
+    }
+
+    .lia-slide > header#lia-toolbar-nav + .lia-slide__container {
+      box-sizing: border-box;
+      flex: 1 1 auto;
+      min-height: 0;
+      margin-block-start: 78px;
+      overflow: auto;
+      background: #fff;
+    }
+
+    main.lia-slide__content {
+      box-sizing: border-box;
+      min-height: 100%;
+      padding: 24px;
+    }
+
+    #header-collapse-result {
+      position: fixed;
+      right: 8px;
+      bottom: 8px;
+      z-index: 100000000;
+      max-width: min(760px, calc(100vw - 16px));
+      max-height: 48vh;
+      overflow: auto;
+      margin: 0;
+      padding: 8px;
+      border: 1px solid #777;
+      background: #fff;
+      color: #111;
+      font: 12px/1.35 monospace;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class='lia-slide lia-mode--presentation'>
+    <header id='lia-toolbar-nav'>
+      <div class='lia-header__left'>
+        <button
+          id='lia-btn-toc'
+          class='lia-btn'
+          type='button'
+          aria-label='Inhaltsverzeichnis'
+        >TOC</button>
+      </div>
+    </header>
+
+    <div id='slide-container' class='lia-slide__container'>
+      <main class='lia-slide__content'>
+        <h1>Headerband-Test</h1>
+        <p>Diese breite Fixture prüft das Ein- und Ausklappen des LiaScript-Headers.</p>
+      </main>
+    </div>
+  </div>
+
+  <pre id='header-collapse-result'>running</pre>
+
+  <script>
+    localStorage.setItem('settings', JSON.stringify({
+      mode: 'presentation',
+      language: 'de'
+    }));
+
+    // Headless --dump-dom does not consistently advance compositor frames.
+    window.requestAnimationFrame = function (callback) {
+      return window.setTimeout(function () { callback(performance.now()); }, 0);
+    };
+    window.cancelAnimationFrame = window.clearTimeout;
+  </script>
+  <script src='../dist/index.js?t=header-collapse'></script>
+  <script>
+    (async function runHeaderCollapseTest() {
+      var wait = function (ms) {
+        return new Promise(function (resolve) { window.setTimeout(resolve, ms); });
+      };
+      var result = document.getElementById('header-collapse-result');
+      var details = {
+        pass: false,
+        viewportWidth: document.documentElement.clientWidth
+      };
+
+      function pulse() {
+        document.documentElement.toggleAttribute('data-header-collapse-test-pulse');
+      }
+
+      function setMode(mode) {
+        localStorage.setItem('settings', JSON.stringify({
+          mode: mode,
+          language: 'de'
+        }));
+        pulse();
+      }
+
+      function nearlyEqual(actual, expected, tolerance) {
+        return Math.abs(actual - expected) <= tolerance;
+      }
+
+      function snapshot(label) {
+        var button = document.getElementById('lia-tff-header-toggle-v2');
+        var header = document.getElementById('lia-toolbar-nav');
+        var container = document.getElementById('slide-container');
+        var slide = document.querySelector('.lia-slide');
+        var root = document.documentElement;
+        var viewportWidth = root.clientWidth;
+        var buttonRect = button && button.getBoundingClientRect();
+        var headerRect = header && header.getBoundingClientRect();
+        var containerRect = container && container.getBoundingClientRect();
+        var slideRect = slide && slide.getBoundingClientRect();
+        var buttonStyle = button && getComputedStyle(button);
+        var headerStyle = header && getComputedStyle(header);
+        var containerStyle = container && getComputedStyle(container);
+        var expectedRightGap = viewportWidth * 0.05;
+        var actualRightGap = buttonRect ? viewportWidth - buttonRect.right : null;
+
+        return {
+          label: label,
+          mode: root.dataset.liaMode || null,
+          rootCollapsed: root.classList.contains('lia-tff-header-collapsed'),
+          buttonPresent: Boolean(button),
+          buttonDisplay: buttonStyle ? buttonStyle.display : null,
+          buttonText: button ? button.textContent : null,
+          ariaLabel: button ? button.getAttribute('aria-label') : null,
+          title: button ? button.getAttribute('title') : null,
+          ariaExpanded: button ? button.getAttribute('aria-expanded') : null,
+          ariaControls: button ? button.getAttribute('aria-controls') : null,
+          activeElementId: document.activeElement
+            ? document.activeElement.id || document.activeElement.tagName
+            : null,
+          buttonTop: buttonRect ? buttonRect.top : null,
+          headerBottom: headerRect ? headerRect.bottom : null,
+          buttonRightGap: actualRightGap,
+          expectedRightGap: expectedRightGap,
+          topIsZero: Boolean(buttonRect && nearlyEqual(buttonRect.top, 0, 1)),
+          buttonTracksHeaderBottom: Boolean(
+            buttonRect && headerRect &&
+            nearlyEqual(buttonRect.top, headerRect.bottom, 1)
+          ),
+          rightIsFivePercent: Boolean(
+            buttonRect && nearlyEqual(actualRightGap, expectedRightGap, 1.5)
+          ),
+          headerHeight: headerRect ? headerRect.height : null,
+          headerOpacity: headerStyle ? parseFloat(headerStyle.opacity) : null,
+          headerVisibility: headerStyle ? headerStyle.visibility : null,
+          containerMarginStart: containerStyle
+            ? parseFloat(containerStyle.marginBlockStart)
+            : null,
+          containerTop: containerRect ? containerRect.top : null,
+          containerHeight: containerRect ? containerRect.height : null,
+          spaceBeforeContainer: containerRect && slideRect
+            ? containerRect.top - slideRect.top
+            : null
+        };
+      }
+
+      function isCollapsedState(sample, expectedMode) {
+        return Boolean(
+          sample.mode === expectedMode &&
+          sample.rootCollapsed &&
+          sample.buttonPresent &&
+          sample.buttonDisplay === 'flex' &&
+          sample.buttonText === String.fromCodePoint(0x25BC) &&
+          sample.ariaLabel === 'Headerband ausfahren' &&
+          sample.title === 'Headerband ausfahren' &&
+          sample.ariaExpanded === 'false' &&
+          sample.ariaControls === 'lia-toolbar-nav' &&
+          sample.topIsZero &&
+          sample.rightIsFivePercent &&
+          sample.headerHeight <= 0.5 &&
+          sample.headerOpacity <= 0.01 &&
+          sample.headerVisibility === 'hidden' &&
+          sample.containerMarginStart <= 0.5 &&
+          sample.spaceBeforeContainer <= 0.5
+        );
+      }
+
+      function isExpandedState(sample, expectedMode) {
+        return Boolean(
+          sample.mode === expectedMode &&
+          !sample.rootCollapsed &&
+          sample.buttonPresent &&
+          sample.buttonDisplay === 'flex' &&
+          sample.buttonText === String.fromCodePoint(0x25B2) &&
+          sample.ariaLabel === 'Headerband einklappen' &&
+          sample.title === 'Headerband einklappen' &&
+          sample.ariaExpanded === 'true' &&
+          sample.ariaControls === 'lia-toolbar-nav' &&
+          sample.buttonTracksHeaderBottom &&
+          sample.rightIsFivePercent &&
+          sample.headerHeight >= 55 &&
+          sample.headerOpacity >= 0.99 &&
+          sample.headerVisibility === 'visible' &&
+          nearlyEqual(sample.containerMarginStart, 78, 0.5) &&
+          nearlyEqual(sample.spaceBeforeContainer, 78, 1)
+        );
+      }
+
+      function isTextbookFallback(sample) {
+        return Boolean(
+          sample.mode === 'textbook' &&
+          !sample.rootCollapsed &&
+          sample.buttonPresent &&
+          sample.buttonDisplay === 'none' &&
+          sample.buttonText === String.fromCodePoint(0x25BC) &&
+          sample.ariaLabel === 'Headerband ausfahren' &&
+          sample.title === 'Headerband ausfahren' &&
+          sample.ariaExpanded === 'false' &&
+          sample.headerHeight >= 55 &&
+          sample.headerOpacity >= 0.99 &&
+          sample.headerVisibility === 'visible' &&
+          nearlyEqual(sample.containerMarginStart, 78, 0.5) &&
+          nearlyEqual(sample.spaceBeforeContainer, 78, 1)
+        );
+      }
+
+      try {
+        await wait(600);
+
+        details.wideViewport = document.documentElement.clientWidth > 1000;
+        details.stylePresent = Boolean(
+          document.getElementById('lia-tff-style-root-v2')
+        );
+        details.initial = snapshot('initial-expanded');
+
+        var button = document.getElementById('lia-tff-header-toggle-v2');
+        if (!button) throw new Error('Header toggle button was not created');
+
+        button.focus();
+        button.click();
+        await wait(300);
+        details.collapsed = snapshot('collapsed');
+
+        setMode('textbook');
+        await wait(300);
+        details.textbook = snapshot('textbook');
+
+        setMode('presentation');
+        await wait(300);
+        details.returned = snapshot('returned');
+
+        setMode('slides');
+        await wait(300);
+        details.slides = snapshot('slides');
+
+        details.roomGain = {
+          space: details.initial.spaceBeforeContainer -
+            details.collapsed.spaceBeforeContainer,
+          height: details.collapsed.containerHeight -
+            details.initial.containerHeight
+        };
+
+        details.pass = Boolean(
+          details.wideViewport &&
+          details.stylePresent &&
+          isExpandedState(details.initial, 'presentation') &&
+          isCollapsedState(details.collapsed, 'presentation') &&
+          isTextbookFallback(details.textbook) &&
+          isCollapsedState(details.returned, 'presentation') &&
+          isCollapsedState(details.slides, 'slides') &&
+          details.textbook.activeElementId === 'lia-btn-toc' &&
+          details.returned.activeElementId === 'lia-tff-header-toggle-v2' &&
+          details.roomGain.space >= 77 &&
+          details.roomGain.height >= 77
+        );
+      } catch (error) {
+        details.error = error && error.stack ? error.stack : String(error);
+        details.pass = false;
+      }
+
+      document.body.dataset.headerCollapseTest = details.pass ? 'pass' : 'fail';
+      result.textContent = JSON.stringify(details);
+    })();
+  </script>
+</body>
+</html>

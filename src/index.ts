@@ -13,7 +13,7 @@ import { syncNightlyMiniMode, toolbarSignature } from "./toolbar";
 import {
   ensureUI,
   setPresentationOnlyVisibility, positionOverlayButton, positionPanel,
-  syncFontSizeLabel, syncVoiceFooterToggle
+  syncFontSizeLabel, syncVoiceFooterToggle, syncHeaderBandToggle
 } from "./ui";
 import { burstRepositionThrottled, wireOnce, initEvents } from "./events";
 import { initModeOnly, applyModeOnlyNow } from "./modeOnly";
@@ -49,6 +49,7 @@ import { initModeOnly, applyModeOnlyNow } from "./modeOnly";
         syncNightlyMiniMode();
         const show = setPresentationOnlyVisibility(mode);
         syncVoiceFooterToggle(mode);
+        syncHeaderBandToggle(mode);
 
         const showChanged = (I.lastShow === null) ? true : (show !== I.lastShow);
         I.lastShow = show;

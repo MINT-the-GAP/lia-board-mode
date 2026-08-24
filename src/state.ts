@@ -115,6 +115,7 @@ export const SLIDER_ID = "lia-tff-slider-v2";
 export const TITLE_ID = "lia-tff-title-v2";
 export const INLINE_SLOT_ID = "lia-tff-inline-slot-v2";
 export const VOICE_TOGGLE_BTN_ID = "lia-tff-voice-toggle-v2";
+export const HEADER_TOGGLE_BTN_ID = "lia-tff-header-toggle-v2";
 
 export function clamp(n: number, a: number, b: number): number {
   return Math.max(a, Math.min(b, n));

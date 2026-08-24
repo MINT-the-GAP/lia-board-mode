@@ -46,6 +46,7 @@ https://github.com/MINT-the-GAP/lia-board-mode
 After importing this plugin your document will automatically:
 
 - Use ~98.5% of the screen width in **Presentation** and **Slides** mode
+- Keep the header toolbar expanded by default and allow the header and TTS footer to be collapsed in wide **Presentation** and **Slides** layouts
 - Show an **AA button** in the toolbar (Presentation mode only) that opens a font-size slider (14–48 px, persisted in localStorage)
 - Auto-boost the font size to 18/24/32 px based on the current base font (can be overridden with the slider)
 - Support `data-lia-only` attributes to conditionally show blocks per mode

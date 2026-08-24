@@ -1,7 +1,7 @@
 // Event wiring: button/slider listeners, MutationObserver, storage events, and reposition bursts.
 
 import { ROOT_WIN, ROOT_DOC, CONTENT_DOC, SETTINGS_KEY, FONT_KEY, PANEL_ID, BTN_ID, SLIDER_ID, VOICE_TOGGLE_BTN_ID, I, clearPosTimers } from "./state";
-import { positionOverlayButton, positionPanel } from "./ui";
+import { positionOverlayButton, positionPanel, positionHeaderBandToggle } from "./ui";
 import { getToolbarHeader } from "./toolbar";
 import { setPresFontPx } from "./font";
 import { clamp } from "./state";
@@ -10,6 +10,7 @@ import { isEditableKeyboardEvent } from "./keyboard";
 function runPositionNow(): void {
   positionOverlayButton();
   positionPanel();
+  positionHeaderBandToggle();
 }
 
 export function scheduleRepositionBurst(): void {
@@ -71,10 +72,10 @@ export function wireOnce(): void {
     }
   });
 
-  ROOT_WIN.addEventListener("resize", () => { positionOverlayButton(); positionPanel(); });
+  ROOT_WIN.addEventListener("resize", runPositionNow);
   if (ROOT_WIN.visualViewport) {
-    ROOT_WIN.visualViewport.addEventListener("resize", () => { positionOverlayButton(); positionPanel(); });
-    ROOT_WIN.visualViewport.addEventListener("scroll", () => { positionOverlayButton(); positionPanel(); });
+    ROOT_WIN.visualViewport.addEventListener("resize", runPositionNow);
+    ROOT_WIN.visualViewport.addEventListener("scroll", runPositionNow);
   }
 
   slider.addEventListener("input", () => {
@@ -112,6 +113,12 @@ export function initEvents(tickFn: () => void): void {
     if (!e) return;
     if (e.key === SETTINGS_KEY || e.key === FONT_KEY) tickFn();
   });
+
+  // Re-evaluate the wide-screen band toggles immediately at their breakpoint.
+  ROOT_WIN.addEventListener("resize", tickFn);
+  if (ROOT_WIN.visualViewport) {
+    ROOT_WIN.visualViewport.addEventListener("resize", tickFn);
+  }
 
   ROOT_WIN.setInterval(() => { if (I.__alive) tickFn(); }, 5000);
 
