@@ -423,7 +423,8 @@ const ROOT_CSS = `
   position: fixed !important;
   right: 5% !important;
   top: 0 !important;
-  z-index: 99999982 !important;
+  /* Below LiaScript's header (100) and its menus, above slide content. */
+  z-index: 99 !important;
   width: 28px !important;
   height: 24px !important;
   display: none;
