@@ -58,7 +58,7 @@ export const CONTENT_DOC = document;
 // =========================================================
 // Per-Document Instance (import multiple times => no collision)
 // =========================================================
-const REGKEY = "__LIA_TFF_REG_V2__";
+const REGKEY = "__LIA_TFF_REG_V2__" as const;
 
 export interface Registry {
   instances: Record<string, Instance>;
@@ -75,8 +75,12 @@ export interface Instance {
   pendingReposition: boolean;
 }
 
-(ROOT_WIN as any)[REGKEY] = (ROOT_WIN as any)[REGKEY] || { instances: {} };
-export const REG: Registry = (ROOT_WIN as any)[REGKEY];
+/** The registry lives on the root window so repeated script evaluation shares it. */
+type RegistryHost = Window & { [REGKEY]?: Registry };
+
+const registryHost = ROOT_WIN as RegistryHost;
+registryHost[REGKEY] = registryHost[REGKEY] || { instances: {} };
+export const REG: Registry = registryHost[REGKEY];
 
 export const DOC_ID =
   (CONTENT_DOC.baseURI || CONTENT_WIN.location.href || "") +
@@ -86,7 +90,7 @@ export const DOC_ID =
 export let I: Instance = null!;
 
 export function initInstance(): boolean {
-  if ((REG.instances[DOC_ID] as any)?.__alive) return false;
+  if (REG.instances[DOC_ID]?.__alive) return false;
   I = {
     __alive: true,
     ticking: false,

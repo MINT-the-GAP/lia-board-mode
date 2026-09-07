@@ -32,7 +32,14 @@ export function ensureUI(onCreated?: () => void): void {
     const initialLabel = getFontSizeLabel();
     btn.setAttribute("aria-label", initialLabel);
     btn.setAttribute("title", initialLabel);
-    btn.innerHTML = `<span class="tffA-small">A</span><span class="tffA-big">A</span>`;
+    const small = ROOT_DOC.createElement("span");
+    small.className = "tffA-small";
+    small.textContent = "A";
+    const big = ROOT_DOC.createElement("span");
+    big.className = "tffA-big";
+    big.textContent = "A";
+    btn.appendChild(small);
+    btn.appendChild(big);
     overlay.appendChild(btn);
   }
 
@@ -42,9 +49,22 @@ export function ensureUI(onCreated?: () => void): void {
     panel = ROOT_DOC.createElement("div");
     panel.id = PANEL_ID;
     const initialLabel = getFontSizeLabel();
-    panel.innerHTML =
-      `<div id="${TITLE_ID}">${initialLabel}</div>` +
-      `<input id="${SLIDER_ID}" type="range" min="14" max="48" step="1" value="24" aria-label="${initialLabel}" />`;
+
+    const title = ROOT_DOC.createElement("div");
+    title.id = TITLE_ID;
+    title.textContent = initialLabel;
+
+    const slider = ROOT_DOC.createElement("input");
+    slider.id = SLIDER_ID;
+    slider.type = "range";
+    slider.min = "14";
+    slider.max = "48";
+    slider.step = "1";
+    slider.value = "24";
+    slider.setAttribute("aria-label", initialLabel);
+
+    panel.appendChild(title);
+    panel.appendChild(slider);
     ROOT_DOC.body.appendChild(panel);
     created = true;
   }

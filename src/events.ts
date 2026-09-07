@@ -28,10 +28,25 @@ export function burstRepositionThrottled(): void {
   scheduleRepositionBurst();
 }
 
+// Every long-lived listener and observer registers here so a single teardown
+// call can release them. ROOT_DOC/ROOT_WIN outlive individual macro nodes, so
+// without this the SPA accumulates handlers on every re-render.
+const teardown = new AbortController();
+const observers: { disconnect(): void }[] = [];
+
+/** Releases every document/window listener and observer this module attached. */
+export function disposeEvents(): void {
+  teardown.abort();
+  while (observers.length) {
+    try { observers.pop()!.disconnect(); } catch (e) { /* already gone */ }
+  }
+}
+
 function initToolbarResizeObserver(): void {
   if (typeof ResizeObserver === "undefined") return;
   try {
     const ro = new ResizeObserver(() => runPositionNow());
+    observers.push(ro);
     const toolbar = getToolbarHeader();
     if (toolbar) {
       ro.observe(toolbar);
@@ -41,15 +56,23 @@ function initToolbarResizeObserver(): void {
         const t = getToolbarHeader();
         if (t) { ro.observe(t); mo.disconnect(); }
       });
+      observers.push(mo);
       mo.observe(ROOT_DOC.documentElement, { childList: true, subtree: true });
     }
   } catch (e) { }
 }
 
+// ensureUI() calls this whenever it recreates the panel or voice button, which
+// can happen more than once per document. The element listeners below die with
+// their element, but the ROOT_DOC/ROOT_WIN ones would stack, so wire only once.
+let wired = false;
+
 export function wireOnce(): void {
+  if (wired) return;
   const btn = ROOT_DOC.getElementById(BTN_ID);
   const slider = ROOT_DOC.getElementById(SLIDER_ID) as HTMLInputElement | null;
   if (!btn || !slider) return;
+  wired = true;
 
   btn.addEventListener("click", (e) => {
     e.preventDefault();
@@ -63,19 +86,19 @@ export function wireOnce(): void {
     const t = e.target as Element | null;
     if (t && t.closest && (t.closest("#" + PANEL_ID) || t.closest("#" + BTN_ID) || t.closest("#" + VOICE_TOGGLE_BTN_ID))) return;
     ROOT_DOC.body.classList.remove("lia-tff-panel-open");
-  }, true);
+  }, { capture: true, signal: teardown.signal });
 
   ROOT_DOC.addEventListener("keydown", (e) => {
     if (isEditableKeyboardEvent(e)) return;
     if (e.key === "Escape") {
       ROOT_DOC.body.classList.remove("lia-tff-panel-open");
     }
-  });
+  }, { signal: teardown.signal });
 
-  ROOT_WIN.addEventListener("resize", runPositionNow);
+  ROOT_WIN.addEventListener("resize", runPositionNow, { signal: teardown.signal });
   if (ROOT_WIN.visualViewport) {
-    ROOT_WIN.visualViewport.addEventListener("resize", runPositionNow);
-    ROOT_WIN.visualViewport.addEventListener("scroll", runPositionNow);
+    ROOT_WIN.visualViewport.addEventListener("resize", runPositionNow, { signal: teardown.signal });
+    ROOT_WIN.visualViewport.addEventListener("scroll", runPositionNow, { signal: teardown.signal });
   }
 
   slider.addEventListener("input", () => {
@@ -102,28 +125,34 @@ export function initEvents(tickFn: () => void): void {
   }
 
   try {
-    makeObserver().observe(ROOT_DOC.documentElement, { childList: true, subtree: true, attributes: true });
+    const mo = makeObserver();
+    observers.push(mo);
+    mo.observe(ROOT_DOC.documentElement, { childList: true, subtree: true, attributes: true });
   } catch (e) { }
 
   try {
-    makeObserver().observe(CONTENT_DOC.documentElement, { childList: true, subtree: true, attributes: true });
+    const mo = makeObserver();
+    observers.push(mo);
+    mo.observe(CONTENT_DOC.documentElement, { childList: true, subtree: true, attributes: true });
   } catch (e) { }
 
   ROOT_WIN.addEventListener("storage", function (e) {
     if (!e) return;
     if (e.key === SETTINGS_KEY || e.key === FONT_KEY) tickFn();
-  });
+  }, { signal: teardown.signal });
 
   // Re-evaluate the wide-screen band toggles immediately at their breakpoint.
-  ROOT_WIN.addEventListener("resize", tickFn);
+  ROOT_WIN.addEventListener("resize", tickFn, { signal: teardown.signal });
   if (ROOT_WIN.visualViewport) {
-    ROOT_WIN.visualViewport.addEventListener("resize", tickFn);
+    ROOT_WIN.visualViewport.addEventListener("resize", tickFn, { signal: teardown.signal });
   }
 
-  ROOT_WIN.setInterval(() => { if (I.__alive) tickFn(); }, 5000);
+  const pollId = ROOT_WIN.setInterval(() => { if (I.__alive) tickFn(); }, 5000);
+  observers.push({ disconnect: () => ROOT_WIN.clearInterval(pollId) });
 
   try {
-    ROOT_WIN.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => tickFn());
+    ROOT_WIN.matchMedia("(prefers-color-scheme: dark)")
+      .addEventListener("change", () => tickFn(), { signal: teardown.signal });
   } catch (e) { }
 
   initToolbarResizeObserver();
