@@ -1,6 +1,7 @@
 // Course-wide, slide-ordered switch for LiaScript's automatic effect scrolling.
 
 import { CONTENT_DOC } from './state';
+import { parseAutoscrollingSource, type AutoscrollingSourceSlide } from './autoscrollingSource';
 
 export const AUTOSCROLLING_MARKER_ATTR = 'data-lia-tff-autoscrolling';
 
@@ -17,10 +18,59 @@ interface CourseAutoscrollingState {
   doc: Document;
   root: Element;
   slides: Element[];
-  settings: Map<Element, boolean>;
+  settings: Map<Element, boolean | null>;
 }
 
 let courseState: CourseAutoscrollingState | null = null;
+
+interface CourseSource {
+  url: string | null;
+  slides: AutoscrollingSourceSlide[] | null;
+  pending: Promise<void> | null;
+}
+
+let courseSource: CourseSource | null = null;
+
+function courseSourceUrl(doc: Document): string | null {
+  try {
+    // Both the web interpreter and Alt-L put the course URL directly after ?.
+    let source = new URL(doc.URL).search.slice(1);
+    if (!/^https?:\/\//i.test(source)) source = decodeURIComponent(source);
+    if (!/^https?:\/\//i.test(source)) return null;
+    const url = new URL(source);
+    url.hash = '';
+    return url.href;
+  } catch (e) {
+    return null;
+  }
+}
+
+function sourceForCourse(doc: Document): CourseSource {
+  const url = courseSourceUrl(doc);
+  if (courseSource?.url === url) return courseSource;
+
+  const source: CourseSource = { url, slides: null, pending: null };
+  courseSource = source;
+  courseState = null;
+  if (!url) return source;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3000);
+  source.pending = (async () => {
+    try {
+      // Alt-L reloads the whole page on save, often on a later slide. Read the
+      // current file instead of persisting switches from an older revision.
+      const response = await fetch(url, { cache: 'no-store', signal: controller.signal });
+      if (response.ok) source.slides = parseAutoscrollingSource(await response.text());
+    } catch (e) {
+      // Uploaded/inaccessible courses still use the rendered-marker cache.
+    } finally {
+      clearTimeout(timeout);
+      source.pending = null;
+    }
+  })();
+  return source;
+}
 
 function parseAutoscrolling(value: string | null): boolean {
   return String(value || '').trim().toLowerCase() !== 'off';
@@ -51,7 +101,7 @@ function stateForCourse(
       doc,
       root,
       slides,
-      settings: new Map<Element, boolean>()
+      settings: new Map<Element, boolean | null>()
     };
   }
 
@@ -78,9 +128,10 @@ function refreshCourseSettings(
           lastMarker.getAttribute(AUTOSCROLLING_MARKER_ATTR)
         )
       );
-    } else if (slide === activeMain) {
-      // The active body is fully rendered, so absence means no override.
-      state.settings.delete(slide);
+    } else if (slide === activeMain && slide.children.length > 1) {
+      // A rendered body without a marker is authoritative too. A header-only
+      // intermediate render must not erase a previously observed switch.
+      state.settings.set(slide, null);
     }
     // Hidden LiaScript slides may contain only their header. Keep their cache.
   }
@@ -99,15 +150,26 @@ function globalSetting(doc: Document): boolean {
 }
 
 function settingForCoursePosition(doc: Document, main: Element): boolean {
+  const source = sourceForCourse(doc);
   const state = stateForCourse(doc, main);
   refreshCourseSettings(state, main);
+
+  // Only use a source index when its slide structure agrees with LiaScript.
+  // Macro-generated headings or other unsupported syntax fall back to DOM.
+  const sourceSlides = source.slides?.length === state.slides.length &&
+    state.slides.every((slide, index) => {
+      const heading = slide.querySelector('header [ondblclick]');
+      const line = heading?.getAttribute('ondblclick')?.match(/LIA\.lineGoto\((\d+)\)/);
+      return !line || Number(line[1]) === source.slides![index].line;
+    }) ? source.slides : null;
 
   const activeIndex = state.slides.indexOf(main);
   let enabled = globalSetting(doc);
 
   for (let index = 0; index <= activeIndex; index += 1) {
-    const setting = state.settings.get(state.slides[index]);
-    if (setting !== undefined) enabled = setting;
+    const observed = state.settings.get(state.slides[index]);
+    const setting = observed === undefined ? sourceSlides?.[index].enabled : observed;
+    if (setting != null) enabled = setting;
   }
 
   return enabled;
@@ -138,15 +200,26 @@ function guardTarget(target: HTMLElement): void {
     this: HTMLElement,
     arg?: boolean | ScrollIntoViewOptions
   ): void {
-    const activeMain = this.closest('main:not([hidden])') ||
-      activeSlide(this.ownerDocument);
-    if (
-      activeMain &&
-      !settingForCoursePosition(this.ownerDocument, activeMain)
-    ) return;
+    const scroll = (): void => {
+      const activeMain = this.closest('main:not([hidden])') ||
+        activeSlide(this.ownerDocument);
+      if (
+        activeMain &&
+        !settingForCoursePosition(this.ownerDocument, activeMain)
+      ) return;
 
-    if (arg === undefined) original.call(this);
-    else original.call(this, arg);
+      if (arg === undefined) original.call(this);
+      else original.call(this, arg);
+    };
+    const source = sourceForCourse(this.ownerDocument);
+    if (source.pending) {
+      // A fast first click must not race the source lookup on a fresh entry.
+      void source.pending.then(() => {
+        if (this.isConnected && this.closest('main:not([hidden])')) scroll();
+      });
+    } else {
+      scroll();
+    }
   };
 
   try {
@@ -175,6 +248,7 @@ function guardTarget(target: HTMLElement): void {
  * so the existing mutation observer installs the guard before it runs.
  */
 export function syncAutoscrolling(): void {
+  sourceForCourse(CONTENT_DOC);
   const target = activeEffectTarget(CONTENT_DOC);
   const main = target?.closest('main:not([hidden])') ||
     activeSlide(CONTENT_DOC);

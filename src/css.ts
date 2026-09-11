@@ -452,6 +452,19 @@ const ROOT_CSS = `
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--lia-tff-accent) 40%, transparent) !important;
 }
 
+/* Match the light interface while keeping the existing dark tabs unchanged. */
+body:not(.lia-tff-dark) #lia-tff-voice-toggle-v2,
+body:not(.lia-tff-dark) #lia-tff-header-toggle-v2{
+  border-color: color-mix(in srgb, var(--lia-tff-accent) 25%, #adb3bc) !important;
+  background: color-mix(in srgb, var(--lia-tff-accent) 8%, #fff) !important;
+  color: #2e3035 !important;
+}
+
+body:not(.lia-tff-dark) #lia-tff-voice-toggle-v2:hover,
+body:not(.lia-tff-dark) #lia-tff-header-toggle-v2:hover{
+  background: color-mix(in srgb, var(--lia-tff-accent) 16%, #fff) !important;
+}
+
 @media (min-width: 1001px){
   html.lia-tff-header-collapsed #lia-toolbar-nav,
   html.lia-tff-header-collapsed header.lia-header{

@@ -96,7 +96,9 @@ LiaScript normally scrolls the newly revealed animation step into view. On board
 
 Place `@autoscrolling(off)` on a slide to keep the current scroll position when advancing through animation steps. The value applies to that slide and all following slides until another `@autoscrolling(...)` macro changes it. Slides without a macro inherit the most recent value; before the first macro, LiaScript's default behavior (`on`) is used. The plugin remembers switches after LiaScript unloads an inactive slide and resolves later back/forward navigation by course position. Manual scrolling, the table of contents, and notes are not affected.
 
-For a direct jump across slides that LiaScript has never rendered, body macros on the skipped slides are not available to the plugin. Use LiaScript's `persistent: true` setting when such jumps must inherit their switches as well.
+Direct, standalone `@autoscrolling(on)` and `@autoscrolling(off)` calls are also read from the current course file. Their settings therefore survive Alt-L's page reload after saving and apply when opening a later slide directly, even if the earlier slide has never been rendered. Code examples and comments are ignored, and a saved change to a switch takes effect on reload.
+
+This source lookup requires an accessible HTTP(S) course URL and a slide structure that matches the rendered course. For uploaded courses, dynamically generated switches, or unsupported source syntax, switches are learned from rendered slides. Use LiaScript's `persistent: true` setting if those courses need to inherit switches across slides that have not been visited.
 
 ``` markdown
 ## First slide: switch it off
