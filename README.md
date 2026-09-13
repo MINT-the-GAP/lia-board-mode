@@ -1,6 +1,6 @@
 <!--
 author:   MINT-the-GAP, Martin Lommatzsch, Jihad Hyadi
-version:  0.0.2
+version:  0.0.3
 language: de
 edit: true
 narrator: US English Female
@@ -54,6 +54,28 @@ After importing this plugin your document will automatically:
 - Toggle automatic scrolling for the current and all following slides
 - Support common presenter remotes for slide navigation and black-screen toggling
 - Re-enter previous slides at their final animation step when navigating backwards
+- Hide author notes enclosed in `?:- ... -:?` in all three course modes
+
+## `?:- ... -:?` ? Author comments
+
+With board mode loaded, surround an author note with `?:-` and `-:?`. The template hides the delimiters and their enclosed content in **Textbook**, **Presentation**, and **Slides** mode, including after slide changes and reloads. No additional macro is needed.
+
+```markdown
+Visible text. ?:- Remember to revise this example. -:? More visible text.
+
+?:-
+Notes for the next revision.
+This comment can span several paragraphs.
+-:?
+```
+
+Visible text before the note. ?:- This live example is hidden by board mode. -:? Visible text after the note.
+
+Keep both delimiters on the **same slide**. Comments cannot be nested. A missing closer, an unmatched closer, or nested regions produce a visible error message; the malformed region stays visible so later course content is not accidentally hidden. Separate, valid comments still work on that slide.
+
+Inline code and normal fenced code examples display the delimiter characters literally. A code block completely enclosed by a comment region is hidden along with that region. Containers emptied by a comment are also hidden; surrounding content keeps its layout.
+
+This feature removes author notes from the **rendered display after LiaScript has parsed the course**. It does not disable scripts, macros, quizzes, narration, metadata, or headings inside a note. Use it for author notes within slide body content. Do not put notes in headings or document headers, span slide headings, or use them to deactivate executable course sections. The original Markdown, source editors and code examples remain available and unchanged. Comments are not confidential data. Without this template's script, the custom delimiters are ordinary visible text.
 
 ## `data-lia-only` — Mode-conditional content
 

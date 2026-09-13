@@ -17,9 +17,11 @@ import {
 } from "./ui";
 import { burstRepositionThrottled, wireOnce, initEvents } from "./events";
 import { initModeOnly, applyModeOnlyNow } from "./modeOnly";
+import { initAuthorComments } from "./authorComments";
 
 (function () {
   if (!initInstance()) return;
+  initAuthorComments();
   initReverseNavigation();
   initPresenterSupport();
 

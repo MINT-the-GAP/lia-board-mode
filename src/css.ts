@@ -171,6 +171,15 @@ html[data-lia-mode="slides"] main{
   font-size: var(--lia-tff-font) !important;
 }
 
+/* LiaScript's 2rem list indent stays fixed when only the content font grows.
+   Use the list's own font size so markers and wrapped lines keep their space. */
+html[data-lia-mode="presentation"] main .lia-list--unordered,
+html[data-lia-mode="presentation"] main .lia-list--ordered,
+html[data-lia-mode="slides"] main .lia-list--unordered,
+html[data-lia-mode="slides"] main .lia-list--ordered{
+  padding-inline-start: 2em;
+}
+
 /* Reliable scroll spacer only on real slide content nodes. */
 html[data-lia-mode="presentation"] .lia-slide__container > main.lia-slide__content::after,
 html[data-lia-mode="slides"] .lia-slide__container > main.lia-slide__content::after{

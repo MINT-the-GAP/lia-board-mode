@@ -1,0 +1,72 @@
+﻿<!--
+language: en
+mode: Presentation
+version: 0.0.1
+import: ../README.md
+-->
+
+# Author comments
+
+§:- ACHIDDENSTART -:§
+
+ACVISIBLESTART
+
+INLINEBEFORE §:- ACHIDDENINLINE -:§ INLINEAFTER
+
+§:- ACHIDDENADJACENTONE -:§§:- ACHIDDENADJACENTTWO -:§
+
+BLOCKBEFORE
+§:-
+ACHIDDENMULTILINE
+
+**ACHIDDENBOLD** and [ACHIDDENLINK](https://example.org/).
+
+<span style="color: red">ACHIDDENHTML</span>
+-:§
+BLOCKAFTER
+
+Inline example: `§:- ACEXAMPLEINLINE -:§`.
+
+```text
+§:- ACEXAMPLEFENCED -:§
+```
+
+§:-
+ACHIDDENAROUNDCODE
+
+```text
+ACHIDDENCODEINSIDEREGION
+```
+
+-:§
+
+ACVISIBLEEND
+
+§:- ACHIDDENEND -:§
+
+## Missing closer
+
+ACMISSINGBEFORE
+
+§:- ACMISSINGLITERAL
+
+ACMISSINGAFTER
+
+## Nested markers
+
+ACNESTEDBEFORE
+
+§:- ACNESTEDOUTER §:- ACNESTEDINNER -:§ ACNESTEDOUTEREND -:§
+
+ACNESTEDAFTER
+
+§:- ACHIDDENAFTERNESTED -:§
+
+## Return check
+
+§:- ACHIDDENRETURNSTART -:§
+
+ACRETURNBEFORE §:- ACHIDDENRETURNINLINE -:§ ACRETURNAFTER
+
+§:- ACHIDDENRETURNEND -:§
+
