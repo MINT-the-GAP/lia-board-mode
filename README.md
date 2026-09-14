@@ -54,24 +54,32 @@ After importing this plugin your document will automatically:
 - Toggle automatic scrolling for the current and all following slides
 - Support common presenter remotes for slide navigation and black-screen toggling
 - Re-enter previous slides at their final animation step when navigating backwards
-- Hide author notes enclosed in `?:- ... -:?` in all three course modes
+- Hide author notes enclosed in `§:- ... -:§` in all three course modes
 
 Pinch zoom preserves the responsive layout and keeps shared controls coordinated with lia-marker. See the [positioning contract and zoom tests](dev/positioning.md) for integration details and verification instructions.
 
-## `?:- ... -:?` ? Author comments
+## `§:- ... -:§` ? Author comments
 
-With board mode loaded, surround an author note with `?:-` and `-:?`. The template hides the delimiters and their enclosed content in **Textbook**, **Presentation**, and **Slides** mode, including after slide changes and reloads. No additional macro is needed.
+With board mode loaded, surround an author note with `§:-` and `-:§`. The template hides the delimiters and their enclosed content in **Textbook**, **Presentation**, and **Slides** mode, including after slide changes and reloads. No additional macro is needed.
 
 ```markdown
-Visible text. ?:- Remember to revise this example. -:? More visible text.
+Visible text. §:- Remember to revise this example. -:§ More visible text.
 
-?:-
+§:-
 Notes for the next revision.
 This comment can span several paragraphs.
--:?
+-:§
 ```
 
-Visible text before the note. ?:- This live example is hidden by board mode. -:? Visible text after the note.
+
+§:-
+Notes for the next revision.
+This comment can span several paragraphs.
+-:§
+
+
+
+Visible text before the note. §:- This live example is hidden by board mode. -:§ Visible text after the note.
 
 Keep both delimiters on the **same slide**. Comments cannot be nested. A missing closer, an unmatched closer, or nested regions produce a visible error message; the malformed region stays visible so later course content is not accidentally hidden. Separate, valid comments still work on that slide.
 
