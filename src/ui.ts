@@ -4,10 +4,10 @@ import {
   ROOT_WIN, ROOT_DOC, CONTENT_DOC,
   BTN_ID, PANEL_ID, SLIDER_ID, TITLE_ID, OVERLAY_ID, INLINE_SLOT_ID,
   VOICE_TOGGLE_BTN_ID, HEADER_TOGGLE_BTN_ID,
-  clamp, clearPosTimers
+  clamp
 } from "./state";
 import {
-  getViewport, isNightlyNavigationHidden,
+  getViewport, getLayoutViewport, Viewport, isNightlyNavigationHidden,
   shouldUseTFFNightlyStackDock, shouldUseInlineStripDock, ensureInlineDockSlot,
   getDockTarget, getTFFTOCButtonRect, getToolbarHeader
 } from "./toolbar";
@@ -16,7 +16,32 @@ import { detectLanguage, getFontSizeLabel } from "./i18n";
 let voiceCollapsedPref = true;
 let headerCollapsedPref = false;
 
+function setStyle(el: HTMLElement, name: string, value: string): void {
+  if (el.style.getPropertyValue(name) !== value) el.style.setProperty(name, value);
+}
+
+let positionFrame: number | null = null;
+
+/** Every event path shares one geometry pass per frame in ROOT_DOC coordinates. */
+export function requestPositionUpdate(): void {
+  if (positionFrame !== null) return;
+  positionFrame = ROOT_WIN.requestAnimationFrame(() => {
+    positionFrame = null;
+    const viewport = getViewport();
+    positionOverlayButton(viewport);
+    positionPanel(viewport);
+    positionHeaderBandToggle();
+  });
+}
+
+export function cancelPositionUpdate(): void {
+  if (positionFrame === null) return;
+  ROOT_WIN.cancelAnimationFrame(positionFrame);
+  positionFrame = null;
+}
+
 export function ensureUI(onCreated?: () => void): void {
+  let created = false;
   let overlay = ROOT_DOC.getElementById(OVERLAY_ID);
   if (!overlay) {
     overlay = ROOT_DOC.createElement("div");
@@ -41,9 +66,9 @@ export function ensureUI(onCreated?: () => void): void {
     btn.appendChild(small);
     btn.appendChild(big);
     overlay.appendChild(btn);
+    created = true;
   }
 
-  let created = false;
   let panel = ROOT_DOC.getElementById(PANEL_ID);
   if (!panel) {
     panel = ROOT_DOC.createElement("div");
@@ -130,9 +155,9 @@ function updateVoiceToggleButtonLabel(): void {
 function isWidePresentationMode(mode: string): boolean {
   if (mode !== "presentation" && mode !== "slides") return false;
 
-  const vv = ROOT_WIN.visualViewport;
-  const w = vv ? vv.width : (ROOT_DOC.documentElement.clientWidth || 0);
-  return w >= 1001;
+  return ROOT_WIN.matchMedia
+    ? ROOT_WIN.matchMedia("(min-width: 1001px)").matches
+    : getLayoutViewport().w >= 1001;
 }
 
 export function toggleVoiceFooterCollapsed(): void {
@@ -154,7 +179,7 @@ export function syncVoiceFooterToggle(mode: string): void {
   };
 
   const show = isWidePresentationMode(mode);
-  btn.style.display = show ? "flex" : "none";
+  setStyle(btn, "display", show ? "flex" : "none");
 
   if (!show) {
     setVoiceCollapsedClass(false);
@@ -225,10 +250,9 @@ export function toggleHeaderBandCollapsed(): void {
   setHeaderCollapsedClass(headerCollapsedPref);
   if (headerCollapsedPref) {
     ROOT_DOC.body.classList.remove("lia-tff-panel-open");
-    clearPosTimers();
   }
   updateHeaderToggleButtonLabel();
-  positionHeaderBandToggle();
+  requestPositionUpdate();
 }
 
 export function positionHeaderBandToggle(): void {
@@ -289,18 +313,18 @@ export function syncHeaderBandToggle(mode: string): void {
         btn.blur();
       }
     }
-    btn.style.display = "none";
-    positionHeaderBandToggle();
+    setStyle(btn, "display", "none");
+    requestPositionUpdate();
     updateHeaderToggleButtonLabel();
     return;
   }
 
-  btn.style.display = "flex";
+  setStyle(btn, "display", "flex");
 
   // Re-apply the preference if LiaScript replaced the root element's classes.
   setHeaderCollapsedClass(headerCollapsedPref);
 
-  positionHeaderBandToggle();
+  requestPositionUpdate();
   updateHeaderToggleButtonLabel();
 }
 
@@ -314,10 +338,6 @@ export function placeButtonInCorrectHost(): void {
   if (shouldUseTFFNightlyStackDock()) {
     if (btn.parentNode !== overlay) overlay.appendChild(btn);
     if (slot && slot.parentNode) slot.parentNode.removeChild(slot);
-    (overlay as HTMLElement).style.left = "0px";
-    (overlay as HTMLElement).style.top = "0px";
-    (btn as HTMLElement).style.left = "";
-    (btn as HTMLElement).style.top = "";
     return;
   }
 
@@ -326,10 +346,10 @@ export function placeButtonInCorrectHost(): void {
     if (inlineSlot && btn.parentNode !== inlineSlot) {
       inlineSlot.appendChild(btn);
     }
-    (overlay as HTMLElement).style.left = "0px";
-    (overlay as HTMLElement).style.top = "0px";
-    (btn as HTMLElement).style.left = "";
-    (btn as HTMLElement).style.top = "";
+    setStyle(overlay as HTMLElement, "left", "0px");
+    setStyle(overlay as HTMLElement, "top", "0px");
+    setStyle(btn as HTMLElement, "left", "");
+    setStyle(btn as HTMLElement, "top", "");
     return;
   }
 
@@ -337,16 +357,42 @@ export function placeButtonInCorrectHost(): void {
   if (slot && slot.parentNode) slot.parentNode.removeChild(slot);
 }
 
-export function positionOverlayButton(): void {
+export function positionOverlayButton(vp = getViewport()): void {
   const btn = ROOT_DOC.getElementById(BTN_ID) as HTMLElement | null;
   const overlay = ROOT_DOC.getElementById(OVERLAY_ID) as HTMLElement | null;
   if (!btn || !overlay) return;
 
   placeButtonInCorrectHost();
 
-  if (shouldUseInlineStripDock()) return;
+  const root = ROOT_DOC.documentElement;
+  const stackDock = shouldUseTFFNightlyStackDock();
+  const marker = ROOT_DOC.querySelector<HTMLElement>("#lia-hl-ui-overlay-v1 > #lia-hl-btn");
+  const markerStyle = marker ? ROOT_WIN.getComputedStyle(marker) : null;
+  const btnStyle = ROOT_WIN.getComputedStyle(btn);
+  const shared = !!marker && btnStyle.display !== "none" && btnStyle.visibility !== "hidden" &&
+    btn.offsetWidth > 0 && btn.offsetHeight > 0 && marker!.offsetWidth > 0 && marker!.offsetHeight > 0 &&
+    markerStyle?.display !== "none" && markerStyle?.visibility !== "hidden";
+  const sharedStack = stackDock && shared;
+  const inline = shouldUseInlineStripDock();
+  const sharedInline = inline && shared;
+  const tocRect = getTFFTOCButtonRect();
+  const sharedFloating = !stackDock && !inline && shared && !!tocRect;
+  if (!sharedStack && !sharedInline && !sharedFloating && root.hasAttribute("data-lia-tff-marker-dock")) {
+    root.removeAttribute("data-lia-tff-marker-dock");
+  }
+  const markerWidth = shared ? (marker!.offsetWidth || (stackDock ? 22 : 40)) : 0;
+  const markerHeight = shared ? (marker!.offsetHeight || (stackDock ? 22 : 40)) : 0;
+  setStyle(root, "--lia-tff-inline-width", sharedInline ? `${46 + markerWidth + 8}px` : "46px");
+  if (inline) {
+    if (sharedInline) {
+      // Reserve space in the actual toolbar: TOC -> marker -> font. The inline
+      // pair follows the layout together when the user pans the magnified crop.
+      const r = btn.getBoundingClientRect();
+      setMarkerPosition(r.left - 8 - markerWidth, r.top + (r.height - markerHeight) / 2, "inline");
+    }
+    return;
+  }
 
-  const vp = getViewport();
   const pad = 8;
   const gap = 8;
 
@@ -357,11 +403,27 @@ export function positionOverlayButton(): void {
     if (r && r.width > 6 && r.height > 6) { bw = r.width; bh = r.height; }
   } catch (e) { }
 
-  let left = pad;
-  let top = pad;
+  if (sharedFloating) {
+    // LiaScript can mount the TOC button in the open sidebar, outside the
+    // header. Anchor both floating controls there, never to the marker's last
+    // independent placement (which may still belong to the previous frame).
+    const groupWidth = markerWidth + gap + bw;
+    const groupHeight = Math.max(markerHeight, bh);
+    const left = clamp(tocRect!.right + gap, vp.ox + pad, vp.ox + vp.w - groupWidth - pad);
+    const top = clamp(tocRect!.top + (tocRect!.height - groupHeight) / 2,
+      vp.oy + pad, vp.oy + vp.h - groupHeight - pad);
+    setStyle(overlay, "left", "0px");
+    setStyle(overlay, "top", "0px");
+    setStyle(btn, "left", `${left + markerWidth + gap}px`);
+    setStyle(btn, "top", `${top + (groupHeight - bh) / 2}px`);
+    setMarkerPosition(left, top + (groupHeight - markerHeight) / 2, "floating");
+    return;
+  }
 
-  if (shouldUseTFFNightlyStackDock()) {
-    const tocRect = getTFFTOCButtonRect();
+  let left = vp.ox + pad;
+  let top = vp.oy + pad;
+
+  if (stackDock) {
     if (tocRect) {
       const stackGap = 6;
       left = tocRect.left + (tocRect.width - bw) / 2;
@@ -382,69 +444,49 @@ export function positionOverlayButton(): void {
     }
   }
 
-  left = clamp(left, pad, vp.w - bw - pad);
-  top = clamp(top, pad, vp.h - bh - pad);
+  // In mini navigation, board-mode owns TOC -> font -> marker. Reserve the
+  // complete stack and expose fixed layout coordinates to the legacy marker.
+  const stackWidth = Math.max(bw, sharedStack ? markerWidth : 0);
+  const stackHeight = bh + (sharedStack ? 6 + markerHeight : 0);
+  left = clamp(left, vp.ox + pad, vp.ox + vp.w - stackWidth - pad);
+  top = clamp(top, vp.oy + pad, vp.oy + vp.h - stackHeight - pad);
 
-  overlay.style.left = `${Math.round(vp.ox)}px`;
-  overlay.style.top = `${Math.round(vp.oy)}px`;
-  btn.style.left = `${Math.round(left)}px`;
-  btn.style.top = `${Math.round(top)}px`;
+  // Keep the overlay origin at layout (0,0). Offsets enter only the bounds;
+  // DOMRect coordinates must never receive the visual offset a second time.
+  setStyle(overlay, "left", "0px");
+  setStyle(overlay, "top", "0px");
+  setStyle(btn, "left", `${left}px`);
+  setStyle(btn, "top", `${top}px`);
+  if (sharedStack) {
+    setMarkerPosition(left + (bw - markerWidth) / 2, top + bh + 6, "stack");
+  }
 }
 
-let panelSize: { w: number; h: number } | null = null;
-
-function measurePanel(panel: HTMLElement): { w: number; h: number } {
-  if (panelSize) return panelSize;
-
-  const prevD = panel.style.display;
-  const prevV = panel.style.visibility;
-  const prevL = panel.style.left;
-  const prevT = panel.style.top;
-
-  panel.style.display = "block";
-  panel.style.visibility = "hidden";
-  panel.style.left = "-9999px";
-  panel.style.top = "-9999px";
-
-  const w = panel.offsetWidth || 240;
-  const h = panel.offsetHeight || 90;
-
-  panel.style.display = prevD;
-  panel.style.visibility = prevV;
-  panel.style.left = prevL;
-  panel.style.top = prevT;
-
-  panelSize = { w, h };
-  return panelSize;
+function setMarkerPosition(left: number, top: number, dock: "inline" | "stack" | "floating"): void {
+  const root = ROOT_DOC.documentElement;
+  setStyle(root, "--lia-tff-marker-left", `${left}px`);
+  setStyle(root, "--lia-tff-marker-top", `${top}px`);
+  if (root.getAttribute("data-lia-tff-marker-dock") !== dock) root.setAttribute("data-lia-tff-marker-dock", dock);
 }
 
-export function positionPanel(): void {
+export function positionPanel(vp: Viewport = getViewport()): void {
   const btn = ROOT_DOC.getElementById(BTN_ID);
   const panel = ROOT_DOC.getElementById(PANEL_ID) as HTMLElement | null;
-  if (!btn || !panel) return;
-
-  if (!ROOT_DOC.body.classList.contains("lia-tff-panel-open")) return;
+  if (!btn || !panel || !ROOT_DOC.body.classList.contains("lia-tff-panel-open")) return;
 
   const r = btn.getBoundingClientRect();
-  const vp = getViewport();
-  const sz = measurePanel(panel);
-
+  // The panel is open now: read its current size after font/language/layout changes.
+  const w = panel.offsetWidth;
+  const h = panel.offsetHeight;
   const gap = 10;
   const pad = 8;
-
-  let left = r.left;
+  const left = clamp(r.left, vp.ox + pad, vp.ox + vp.w - w - pad);
   let top = r.bottom + gap;
+  if (top + h + pad > vp.oy + vp.h) top = r.top - gap - h;
+  top = clamp(top, vp.oy + pad, vp.oy + vp.h - h - pad);
 
-  left = clamp(left, pad, vp.w - sz.w - pad);
-
-  if (top + sz.h + pad > vp.h) {
-    top = r.top - gap - sz.h;
-  }
-
-  top = clamp(top, pad, vp.h - sz.h - pad);
-
-  panel.style.left = `${Math.round(left + vp.ox)}px`;
-  panel.style.top = `${Math.round(top + vp.oy)}px`;
+  setStyle(panel, "left", `${left}px`);
+  setStyle(panel, "top", `${top}px`);
 }
 
 const TFF_HIDE_MAX_W = 680;
@@ -452,11 +494,11 @@ const TFF_HIDE_MIN_DIM = 520;
 
 function isSmallScreen(): boolean {
   try {
-    const vv = ROOT_WIN.visualViewport;
-    const w = vv ? vv.width : (ROOT_DOC.documentElement.clientWidth || 9999);
-    const h = vv ? vv.height : (ROOT_DOC.documentElement.clientHeight || 9999);
-    const minDim = Math.min(w, h);
-    return (w <= TFF_HIDE_MAX_W) || (minDim <= TFF_HIDE_MIN_DIM);
+    if (ROOT_WIN.matchMedia) {
+      return ROOT_WIN.matchMedia("(max-width: 680px), (max-height: 520px)").matches;
+    }
+    const { w, h } = getLayoutViewport();
+    return w <= TFF_HIDE_MAX_W || Math.min(w, h) <= TFF_HIDE_MIN_DIM;
   } catch (e) {
     return false;
   }
@@ -470,14 +512,13 @@ export function setPresentationOnlyVisibility(mode: string): boolean {
   const btn = ROOT_DOC.getElementById(BTN_ID) as HTMLElement | null;
   const panel = ROOT_DOC.getElementById(PANEL_ID);
 
-  if (btn) btn.style.display = show ? "inline-flex" : "none";
+  if (btn) setStyle(btn, "display", show ? "inline-flex" : "none");
 
   if (!show && panel) {
     if (ROOT_DOC.body.classList.contains("lia-tff-panel-open")) {
       ROOT_DOC.body.classList.remove("lia-tff-panel-open");
     }
-    (panel as HTMLElement).style.display = "none";
-    clearPosTimers();
+    setStyle(panel as HTMLElement, "display", "none");
   }
 
   return show;

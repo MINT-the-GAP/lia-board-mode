@@ -56,6 +56,8 @@ After importing this plugin your document will automatically:
 - Re-enter previous slides at their final animation step when navigating backwards
 - Hide author notes enclosed in `?:- ... -:?` in all three course modes
 
+Pinch zoom preserves the responsive layout and keeps shared controls coordinated with lia-marker. See the [positioning contract and zoom tests](dev/positioning.md) for integration details and verification instructions.
+
 ## `?:- ... -:?` ? Author comments
 
 With board mode loaded, surround an author note with `?:-` and `-:?`. The template hides the delimiters and their enclosed content in **Textbook**, **Presentation**, and **Slides** mode, including after slide changes and reloads. No additional macro is needed.

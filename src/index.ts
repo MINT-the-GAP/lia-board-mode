@@ -9,13 +9,13 @@ import { initInstance, I, ROOT_WIN } from "./state";
 import { detectMode, applyModeAttr, safeGetSettingsRaw } from "./mode";
 import { ensureContentCSS, ensureRootCSS, syncAccent, syncDarkMode, syncSlideExitSpace } from "./css";
 import { applyFontLogic, syncSliderToCurrent } from "./font";
-import { syncNightlyMiniMode, toolbarSignature } from "./toolbar";
+import { syncNightlyMiniMode } from "./toolbar";
 import {
   ensureUI,
-  setPresentationOnlyVisibility, positionOverlayButton, positionPanel,
+  setPresentationOnlyVisibility, requestPositionUpdate,
   syncFontSizeLabel, syncVoiceFooterToggle, syncHeaderBandToggle
 } from "./ui";
-import { burstRepositionThrottled, wireOnce, initEvents } from "./events";
+import { wireOnce, initEvents } from "./events";
 import { initModeOnly, applyModeOnlyNow } from "./modeOnly";
 import { initAuthorComments } from "./authorComments";
 
@@ -49,22 +49,9 @@ import { initAuthorComments } from "./authorComments";
 
         ensureUI(wireOnce);
         syncNightlyMiniMode();
-        const show = setPresentationOnlyVisibility(mode);
+        setPresentationOnlyVisibility(mode);
         syncVoiceFooterToggle(mode);
         syncHeaderBandToggle(mode);
-
-        const showChanged = (I.lastShow === null) ? true : (show !== I.lastShow);
-        I.lastShow = show;
-
-        const sig = toolbarSignature();
-        const sigChanged = !!(sig && sig !== I.lastToolbarSig);
-        I.lastToolbarSig = sig || I.lastToolbarSig;
-
-        if (!show && sigChanged) {
-          I.pendingReposition = true;
-        }
-
-        positionOverlayButton();
 
         const modeOrSettingsChanged = (mode !== I.lastMode) || (settingsRaw !== I.lastSettingsRaw);
 
@@ -75,18 +62,11 @@ import { initAuthorComments } from "./authorComments";
           I.lastSettingsRaw = settingsRaw;
         }
 
-        const needBurst = showChanged || sigChanged || modeOrSettingsChanged || I.pendingReposition;
-
         syncSlideExitSpace(mode);
-
-        if (needBurst) {
-          I.pendingReposition = false;
-          burstRepositionThrottled();
-        }
 
         syncSliderToCurrent();
         syncFontSizeLabel();
-        if (show) positionPanel();
+        requestPositionUpdate();
 
       } finally {
         I.ticking = false;

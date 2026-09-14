@@ -149,7 +149,7 @@
       };
 
       function pulse() {
-        document.documentElement.toggleAttribute('data-header-collapse-test-pulse');
+        window.dispatchEvent(new StorageEvent('storage', { key: 'settings' }));
       }
 
       function setMode(mode) {

@@ -18,11 +18,26 @@ export function ensureStyle(doc: Document, id: string, css: string): void {
 }
 
 export function setVar(doc: Document, k: string, v: string): void {
-  try { doc.documentElement.style.setProperty(k, v); } catch (e) { }
+  try {
+    const style = doc.documentElement.style;
+    if (style.getPropertyValue(k) !== v || style.getPropertyPriority(k)) {
+      style.setProperty(k, v);
+    }
+  } catch (e) { }
 }
 
 let cachedAccent: string | null = null;
-let cachedAccentMode: string | null = null;
+let cachedAccentKey: string | null = null;
+
+function accentThemeKey(doc: Document): string {
+  return [doc.documentElement, doc.body].map(el => {
+    if (!el) return "";
+    return [
+      Array.from(el.classList).filter(name => !name.startsWith("lia-tff-")).sort().join(" "),
+      el.getAttribute("data-theme"), el.getAttribute("data-bs-theme")
+    ].join("|");
+  }).join("|");
+}
 
 function getLiaAccentColor(doc: Document | null): string | null {
   try {
@@ -38,6 +53,9 @@ function getLiaAccentColor(doc: Document | null): string | null {
     }
 
     const probe = d.createElement("button");
+    // The temporary measurement must not look like newly rendered course UI
+    // to the document observer.
+    probe.id = "lia-tff-accent-probe-v2";
     probe.className = "lia-btn";
     probe.type = "button";
     probe.textContent = "x";
@@ -56,9 +74,11 @@ function getLiaAccentColor(doc: Document | null): string | null {
 }
 
 export function syncAccent(mode: string): void {
-  if (mode === cachedAccentMode && cachedAccent) {
+  const key = [mode, accentThemeKey(ROOT_DOC), accentThemeKey(CONTENT_DOC),
+    ROOT_WIN.matchMedia?.("(prefers-color-scheme: dark)").matches].join("|");
+  if (key === cachedAccentKey && cachedAccent) {
     setVar(ROOT_DOC, "--lia-tff-accent", cachedAccent);
-    setVar(CONTENT_DOC, "--lia-tff-accent", cachedAccent);
+    if (CONTENT_DOC !== ROOT_DOC) setVar(CONTENT_DOC, "--lia-tff-accent", cachedAccent);
     return;
   }
 
@@ -68,10 +88,10 @@ export function syncAccent(mode: string): void {
     "rgb(11,95,255)";
 
   cachedAccent = acc;
-  cachedAccentMode = mode;
+  cachedAccentKey = key;
 
   setVar(ROOT_DOC, "--lia-tff-accent", acc);
-  setVar(CONTENT_DOC, "--lia-tff-accent", acc);
+  if (CONTENT_DOC !== ROOT_DOC) setVar(CONTENT_DOC, "--lia-tff-accent", acc);
 }
 
 // =========================================================
@@ -353,6 +373,7 @@ export function syncSlideExitSpace(mode: string): void {
       key === lastExitTuneKey
     ) return;
 
+    const initialScrollerHeight = scroller.clientHeight;
     for (let pass = 0; pass < 3; pass++) {
       const lineRect = getLastTextLineRect(content);
       if (!lineRect) break;
@@ -379,6 +400,13 @@ export function syncSlideExitSpace(mode: string): void {
 
       // Force style/layout flush before next pass.
       void content.offsetHeight;
+      if (Math.abs(scroller.clientHeight - initialScrollerHeight) > EXIT_TUNE_EPSILON_PX) {
+        // An intrinsic-height container grows with our spacer instead of
+        // gaining scroll range. Restore it: otherwise its ResizeObserver
+        // would request an ever larger spacer on every following frame.
+        setVar(CONTENT_DOC, "--lia-tff-slide-exit-space", currentExitVar.trim());
+        break;
+      }
     }
 
     lastExitTuneKey = key;
@@ -500,6 +528,14 @@ body:not(.lia-tff-dark) #lia-tff-header-toggle-v2:hover{
   }
 }
 
+/* The inline and collapsed docks share layout-viewport coordinates with
+   lia-marker. A fixed child bypasses its overlay viewport translation. */
+html[data-lia-tff-marker-dock] #lia-hl-ui-overlay-v1 > #lia-hl-btn{
+  position: fixed !important;
+  left: var(--lia-tff-marker-left) !important;
+  top: var(--lia-tff-marker-top) !important;
+}
+
 #${OVERLAY_ID}{
   position: fixed !important;
   z-index: 99999980 !important;
@@ -531,15 +567,15 @@ body:not(.lia-tff-dark) #lia-tff-header-toggle-v2:hover{
   display: flex !important;
   align-items: center !important;
   justify-content: flex-end !important;
-  width: 46px !important;
-  min-width: 46px !important;
-  max-width: 46px !important;
+  width: var(--lia-tff-inline-width, 46px) !important;
+  min-width: var(--lia-tff-inline-width, 46px) !important;
+  max-width: var(--lia-tff-inline-width, 46px) !important;
   height: 34px !important;
   min-height: 34px !important;
   box-sizing: border-box !important;
   padding-right: 2px !important;
   overflow: visible !important;
-  flex: 0 0 46px !important;
+  flex: 0 0 var(--lia-tff-inline-width, 46px) !important;
   pointer-events: none !important;
 }
 

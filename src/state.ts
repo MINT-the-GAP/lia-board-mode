@@ -68,11 +68,6 @@ export interface Instance {
   ticking: boolean;
   lastMode: string | null;
   lastSettingsRaw: string | null;
-  posTimers: number[];
-  lastShow: boolean | null;
-  lastToolbarSig: string | null;
-  lastBurstAt: number;
-  pendingReposition: boolean;
 }
 
 /** The registry lives on the root window so repeated script evaluation shares it. */
@@ -96,11 +91,6 @@ export function initInstance(): boolean {
     ticking: false,
     lastMode: null,
     lastSettingsRaw: null,
-    posTimers: [],
-    lastShow: null,
-    lastToolbarSig: null,
-    lastBurstAt: 0,
-    pendingReposition: false
   };
   REG.instances[DOC_ID] = I;
   return true;
@@ -123,13 +113,4 @@ export const HEADER_TOGGLE_BTN_ID = "lia-tff-header-toggle-v2";
 
 export function clamp(n: number, a: number, b: number): number {
   return Math.max(a, Math.min(b, n));
-}
-
-export function clearPosTimers(): void {
-  try {
-    if (!I.posTimers) I.posTimers = [];
-    while (I.posTimers.length) {
-      ROOT_WIN.clearTimeout(I.posTimers.pop()!);
-    }
-  } catch (e) { }
 }
