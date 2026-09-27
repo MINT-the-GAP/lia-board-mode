@@ -89,7 +89,10 @@ async function run() {
   const server = await startServer(editor);
   let browser;
   try {
-    browser = await playwright.chromium.launch({ headless: true });
+    browser = await playwright.chromium.launch({
+      channel: process.env.BROWSER_CHANNEL || 'chrome',
+      headless: true
+    });
     let page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));

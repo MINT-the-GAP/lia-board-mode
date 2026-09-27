@@ -3,7 +3,8 @@
   "version": "0.0.3",
   "description": "LiaScript plugin: full-width presentation layout + font-size slider (Tafelmodus)",
   "scripts": {
-    "build": "parcel build src/index.ts --dist-dir dist --no-scope-hoist"
+    "build": "parcel build src/index.ts --dist-dir dist --no-scope-hoist",
+    "test:animation-layout": "node dev/test-animation-layout.cjs"
   },
   "devDependencies": {
     "parcel": "^2.13.3",

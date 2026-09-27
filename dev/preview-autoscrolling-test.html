@@ -165,7 +165,9 @@
       const newTargetBlocked = scroller.scrollTop === 25 && nativeCalls.filter(id => id === 'focused').length === 2;
 
       delete replacement.scrollIntoView;
-      replacement.toggleAttribute('data-trigger-repatch');
+      // Use an attribute the runtime deliberately observes. This must not rely
+      // on unrelated spacer ResizeObserver churn to schedule a repair tick.
+      replacement.toggleAttribute('aria-selected');
       await waitForTick();
       scroller.scrollTop = 25;
       replacement.scrollIntoView({ behavior: 'smooth' });

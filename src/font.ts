@@ -32,7 +32,27 @@ export function setPresFontPx(px: number | null): void {
   setVar(CONTENT_DOC, "--lia-tff-font", px == null ? "unset" : (px + "px"));
 }
 
-let sampling = false;
+let sampledMain: Element | null = null;
+let sampledBaseFontPx: number | null = null;
+
+function getAutoPresentationFontPx(): number {
+  const main = CONTENT_DOC.querySelector("main") || CONTENT_DOC.documentElement;
+  const currentVar = CONTENT_WIN.getComputedStyle(CONTENT_DOC.documentElement)
+    .getPropertyValue("--lia-tff-font").trim();
+
+  // A non-numeric value means board-mode is not currently overriding the
+  // source font. Sample it synchronously and keep the result for mode switches
+  // where the current presentation value would otherwise contaminate it.
+  if (sampledMain !== main || sampledBaseFontPx == null) {
+    if (!isFinite(parseFloat(currentVar))) {
+      sampledMain = main;
+      sampledBaseFontPx = getMainFontPx();
+    }
+  }
+
+  const base = sampledBaseFontPx == null ? getMainFontPx() : sampledBaseFontPx;
+  return PRES_PX[pxToStep0to2(base)];
+}
 
 export function applyFontLogic(mode: string): void {
   const isPres = (mode === "presentation");
@@ -40,8 +60,12 @@ export function applyFontLogic(mode: string): void {
 
   if (!isPresLike) {
     setPresFontPx(null);
+    sampledMain = null;
+    sampledBaseFontPx = null;
     return;
   }
+
+  const autoPx = getAutoPresentationFontPx();
 
   if (isPres) {
     const saved = getSavedFontPx();
@@ -51,18 +75,9 @@ export function applyFontLogic(mode: string): void {
     }
   }
 
-  if (sampling) return;
-  sampling = true;
-
-  setPresFontPx(null);
-
-  CONTENT_WIN.requestAnimationFrame(function () {
-    CONTENT_WIN.requestAnimationFrame(function () {
-      const step = pxToStep0to2(getMainFontPx());
-      setPresFontPx(PRES_PX[step]);
-      sampling = false;
-    });
-  });
+  // The final value is written in the current rendering frame. In particular,
+  // do not expose an intermediate `unset` frame before the auto size appears.
+  setPresFontPx(autoPx);
 }
 
 export function syncSliderToCurrent(): void {

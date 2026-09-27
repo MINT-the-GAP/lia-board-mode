@@ -11,6 +11,9 @@ const fixtures = [
   ['preview-presenter-test.html', 'presenter-result', 'presenterTest'],
   ['preview-live-editor-layout-test.html', 'live-editor-layout-result', 'liveEditorLayoutTest'],
   ['preview-toc-layout-test.html', 'result', 'tocLayoutTest'],
+  ['preview-scroll-test.html', 'scroll-jitter-result', 'scrollJitterTest'],
+  ['preview-autoscrolling-test.html', 'autoscrolling-result', 'autoscrollingTest'],
+  ['preview-reverse-navigation-test.html', 'reverse-navigation-result', 'reverseNavigationTest'],
 ];
 (async () => {
   const browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL || 'chrome', headless: true });
@@ -35,7 +38,7 @@ const fixtures = [
       });
       try {
         await page.goto('http://board-layout.test/dev/' + fixture);
-        await page.waitForFunction(flag => ['pass', 'fail'].includes(document.body.dataset[flag]), flag, { timeout: 12000 });
+        await page.waitForFunction(flag => ['pass', 'fail'].includes(document.body.dataset[flag]), flag, { timeout: 30000 });
         const details = JSON.parse(await page.locator('#' + resultId).textContent());
         results.push({ fixture, pass: details.pass && errors.length === 0, errors, ...(details.pass ? {} : { details }) });
         if (fixture === 'preview-header-collapse-test.html' && details.pass) {

@@ -164,6 +164,23 @@ html[data-lia-mode="slides"] body{
   overflow-x: hidden !important;
 }
 
+/* Reserve the vertical scrollbar on the element that actually scrolls. This
+   keeps responsive content at one width while animation steps change the
+   amount of overflow. */
+html[data-lia-mode="presentation"] .lia-slide__container,
+html[data-lia-mode="slides"] .lia-slide__container{
+  scrollbar-gutter: stable;
+}
+
+/* Older engines have no gutter reservation. A permanently allocated classic
+   scrollbar is the closest non-clipping fallback and keeps manual scrolling. */
+@supports not (scrollbar-gutter: stable){
+  html[data-lia-mode="presentation"] .lia-slide__container,
+  html[data-lia-mode="slides"] .lia-slide__container{
+    overflow-y: scroll !important;
+  }
+}
+
 html[data-lia-mode="presentation"] main,
 html[data-lia-mode="slides"] main{
   box-sizing: border-box !important;
@@ -258,11 +275,19 @@ export function ensureContentCSS(): void {
   ensureStyle(CONTENT_DOC, CONTENT_STYLE_ID, CONTENT_CSS);
 }
 
-let lastExitTuneKey: string | null = null;
-let lastExitTuneScroller: HTMLElement | null = null;
-let lastExitTuneContent: HTMLElement | null = null;
 const LAST_LINE_VISIBLE_FRACTION = 0.40;
 const EXIT_TUNE_EPSILON_PX = 1;
+const EXIT_TUNE_HYSTERESIS_PX = 2.5;
+const EXIT_CACHE_LIMIT = 8;
+
+interface ExitSpaceCacheEntry {
+  spacer: number;
+}
+
+// A main element is one rendered slide. Each slide keeps independent values
+// for the presentation/slides viewports in which it has been measured.
+const exitSpaceCache = new WeakMap<HTMLElement, Map<string, ExitSpaceCacheEntry>>();
+const pendingSpacerResize = new WeakMap<Element, number>();
 
 function parseLenToPx(v: string, vh: number): number {
   const s = String(v || "").trim().toLowerCase();
@@ -308,15 +333,102 @@ function getLastTextLineRect(root: Element): DOMRect | null {
   return null;
 }
 
+function finiteCssPx(value: string): number {
+  const parsed = parseFloat(value || "");
+  return isFinite(parsed) ? parsed : 0;
+}
+
+function viewportCacheKey(
+  mode: string,
+  scroller: HTMLElement,
+  scrollerRect: DOMRect
+): string {
+  const halfPixel = (value: number): number => Math.round(value * 2) / 2;
+  return [
+    mode,
+    Math.round(CONTENT_WIN.innerWidth),
+    Math.round(CONTENT_WIN.innerHeight),
+    halfPixel(scroller.clientWidth),
+    halfPixel(scroller.clientHeight),
+    halfPixel(scrollerRect.top)
+  ].join("|");
+}
+
+/**
+ * Measures the end of real DOM content in the scroller's scroll coordinate
+ * system. The main element's own scrollHeight is deliberately not used: it
+ * contains main::after and would feed the generated spacer back into its input.
+ */
+function getNaturalContentEnd(
+  scroller: HTMLElement,
+  content: HTMLElement,
+  scrollerRect: DOMRect,
+  contentRect: DOMRect
+): number {
+  const contentStyle = CONTENT_WIN.getComputedStyle(content);
+  const scrollOriginTop = scrollerRect.top + scroller.clientTop;
+  const contentTop = contentRect.top - scrollOriginTop + scroller.scrollTop;
+  let flowBottom = finiteCssPx(contentStyle.paddingTop);
+
+  // Direct children define the normal-flow extent of LiaScript's main. Their
+  // boxes are unaffected by the generated ::after spacer. Include a positive
+  // trailing margin because it otherwise sits between the child and ::after.
+  for (const child of Array.from(content.children) as HTMLElement[]) {
+    const rect = child.getBoundingClientRect();
+    if (!rect.width && !rect.height) continue;
+    const style = CONTENT_WIN.getComputedStyle(child);
+    if (style.display === "none" || style.position === "fixed") continue;
+    flowBottom = Math.max(
+      flowBottom,
+      rect.bottom - contentRect.top + Math.max(0, finiteCssPx(style.marginBottom))
+    );
+  }
+
+  flowBottom += finiteCssPx(contentStyle.paddingBottom) +
+    finiteCssPx(contentStyle.borderBottomWidth);
+  return Math.max(0, contentTop + flowBottom);
+}
+
+function stableSpacer(rawSpacer: number, previous: number | null, maximum: number): number {
+  const clamped = clamp(rawSpacer, 0, maximum);
+  if (previous == null) {
+    return rawSpacer < EXIT_TUNE_HYSTERESIS_PX
+      ? 0
+      : Math.round(clamped * 2) / 2;
+  }
+
+  // Crossing zero is intentionally asymmetric. A cached spacer only turns off
+  // after real content exceeds the target by the hysteresis amount; a zero
+  // spacer only turns on after the same positive margin has been crossed.
+  if (previous <= EXIT_TUNE_EPSILON_PX) {
+    if (rawSpacer < EXIT_TUNE_HYSTERESIS_PX) return 0;
+  } else if (rawSpacer > -EXIT_TUNE_HYSTERESIS_PX && clamped <= EXIT_TUNE_EPSILON_PX) {
+    return Math.min(previous, EXIT_TUNE_HYSTERESIS_PX);
+  }
+
+  if (Math.abs(clamped - previous) <= EXIT_TUNE_HYSTERESIS_PX) return previous;
+  return Math.round(clamped * 2) / 2;
+}
+
+function rememberSpacerResize(content: HTMLElement, scroller?: HTMLElement): void {
+  pendingSpacerResize.set(content, CONTENT_WIN.performance.now());
+  if (scroller) pendingSpacerResize.set(scroller, CONTENT_WIN.performance.now());
+}
+
+/** Returns true once for a prompt ResizeObserver notification caused by us. */
+export function consumeSlideExitSpaceResize(target: Element): boolean {
+  const writtenAt = pendingSpacerResize.get(target);
+  if (writtenAt == null) return false;
+  pendingSpacerResize.delete(target);
+  return CONTENT_WIN.performance.now() - writtenAt < 250;
+}
+
 /**
  * Adapts extra slide scroll-space so only ~40% of the last rendered text line
  * remains visible at max scroll across different responsive LiaScript layouts.
  */
 export function syncSlideExitSpace(mode: string): void {
   if (mode !== "presentation" && mode !== "slides") {
-    lastExitTuneKey = null;
-    lastExitTuneScroller = null;
-    lastExitTuneContent = null;
     return;
   }
 
@@ -332,9 +444,9 @@ export function syncSlideExitSpace(mode: string): void {
         const r = el.getBoundingClientRect();
         const visH = Math.max(0, Math.min(r.bottom, vpH) - Math.max(r.top, 0));
         const visScore = visH * Math.max(1, r.width);
-        const overflow = Math.max(0, el.scrollHeight - el.clientHeight);
         const shown = (cs.display !== "none" && cs.visibility !== "hidden") ? 1 : 0;
-        return { el, r, score: shown * (visScore + overflow * 10) };
+        const active = el.querySelector("main.lia-slide__content:not([hidden]),main:not([hidden])") ? 1 : 0;
+        return { el, r, score: shown * active * visScore };
       })
       .sort((a, b) => b.score - a.score);
 
@@ -345,73 +457,74 @@ export function syncSlideExitSpace(mode: string): void {
 
     if (!scroller) return;
 
-    const content = (scroller.querySelector("main.lia-slide__content") ||
-      CONTENT_DOC.querySelector("main.lia-slide__content") ||
-      CONTENT_DOC.querySelector("main")) as HTMLElement | null;
+    const content = (
+      scroller.querySelector("main.lia-slide__content:not([hidden])") ||
+      scroller.querySelector("main:not([hidden])") ||
+      CONTENT_DOC.querySelector("main.lia-slide__content:not([hidden])") ||
+      CONTENT_DOC.querySelector("main:not([hidden])")
+    ) as HTMLElement | null;
     if (!content) return;
 
-    // The spacer is the output of this calculation. Remove it from the
-    // signature so changing the output cannot invalidate the cache itself.
-    const currentExitVar = CONTENT_WIN.getComputedStyle(CONTENT_DOC.documentElement)
-      .getPropertyValue('--lia-tff-slide-exit-space');
+    // Read phase. No style is changed until every geometry value is captured.
+    const scrollerRect = scroller.getBoundingClientRect();
+    const visibleScrollerHeight = Math.max(
+      0,
+      Math.min(scrollerRect.bottom, vpH) - Math.max(scrollerRect.top, 0)
+    );
+    const currentExitVar = CONTENT_WIN.getComputedStyle(content)
+      .getPropertyValue("--lia-tff-slide-exit-space");
     const currentExitPx = parseLenToPx(currentExitVar, CONTENT_WIN.innerHeight);
 
-    const key = [
-      mode,
-      Math.round(CONTENT_WIN.innerWidth),
-      Math.round(CONTENT_WIN.innerHeight),
-      Math.round(scroller.clientHeight),
-      Math.round(scroller.scrollHeight - currentExitPx),
-      Math.round(scroller.getBoundingClientRect().top),
-      Math.round(content.clientWidth),
-      Math.round(content.scrollHeight - currentExitPx)
-    ].join("|");
-    // A clamped or quantized layout is still a completed measurement.
-    if (
-      scroller === lastExitTuneScroller &&
-      content === lastExitTuneContent &&
-      key === lastExitTuneKey
-    ) return;
-
-    const initialScrollerHeight = scroller.clientHeight;
-    for (let pass = 0; pass < 3; pass++) {
-      const lineRect = getLastTextLineRect(content);
-      if (!lineRect) break;
-
-      const scrollerRect = scroller.getBoundingClientRect();
-      const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-      const lineTopAtMax =
-        lineRect.top - Math.max(0, maxScrollTop - scroller.scrollTop);
-      const targetTop =
-        scrollerRect.top - ((1 - LAST_LINE_VISIBLE_FRACTION) * Math.max(2, lineRect.height));
-
-      const currVar = CONTENT_WIN.getComputedStyle(CONTENT_DOC.documentElement)
-        .getPropertyValue("--lia-tff-slide-exit-space");
-      const currPx = parseLenToPx(currVar, CONTENT_WIN.innerHeight);
-
-      const delta = lineTopAtMax - targetTop;
-      const absErr = Math.abs(delta);
-      if (absErr <= EXIT_TUNE_EPSILON_PX) break;
-
-      const newPx = clamp(currPx + delta, 0, scroller.clientHeight * 1.25);
-      if (Math.abs(newPx - currPx) < EXIT_TUNE_EPSILON_PX) break;
-
-      setVar(CONTENT_DOC, "--lia-tff-slide-exit-space", `${newPx.toFixed(2)}px`);
-
-      // Force style/layout flush before next pass.
-      void content.offsetHeight;
-      if (Math.abs(scroller.clientHeight - initialScrollerHeight) > EXIT_TUNE_EPSILON_PX) {
-        // An intrinsic-height container grows with our spacer instead of
-        // gaining scroll range. Restore it: otherwise its ResizeObserver
-        // would request an ever larger spacer on every following frame.
-        setVar(CONTENT_DOC, "--lia-tff-slide-exit-space", currentExitVar.trim());
-        break;
+    // Some test shells and transient LiaScript renders leave the container at
+    // intrinsic height. A spacer would enlarge that container instead of adding
+    // scroll range, so disable it until the real bounded scroller is present.
+    const intrinsicScroller =
+      scroller.scrollHeight <= scroller.clientHeight + EXIT_TUNE_EPSILON_PX &&
+      scroller.clientHeight > visibleScrollerHeight + EXIT_TUNE_EPSILON_PX;
+    if (intrinsicScroller) {
+      if (currentExitPx > EXIT_TUNE_EPSILON_PX) {
+        content.style.setProperty("--lia-tff-slide-exit-space", "0px");
+        // An intrinsic container changes size together with main.
+        rememberSpacerResize(content, scroller);
       }
+      return;
     }
 
-    lastExitTuneKey = key;
-    lastExitTuneScroller = scroller;
-    lastExitTuneContent = content;
+    const lineRect = getLastTextLineRect(content);
+    if (!lineRect) return;
+    const contentRect = content.getBoundingClientRect();
+    const naturalEnd = getNaturalContentEnd(scroller, content, scrollerRect, contentRect);
+    const scrollOriginTop = scrollerRect.top + scroller.clientTop;
+    const lineTopInScrollContent = lineRect.top - scrollOriginTop + scroller.scrollTop;
+    const desiredScrollHeight = scroller.clientHeight + lineTopInScrollContent +
+      ((1 - LAST_LINE_VISIBLE_FRACTION) * Math.max(2, lineRect.height));
+    const rawSpacer = desiredScrollHeight - naturalEnd;
+    const key = viewportCacheKey(mode, scroller, scrollerRect);
+    let cache = exitSpaceCache.get(content);
+    if (!cache) {
+      cache = new Map<string, ExitSpaceCacheEntry>();
+      exitSpaceCache.set(content, cache);
+    }
+    const previous = cache.get(key);
+    const targetSpacer = stableSpacer(
+      rawSpacer,
+      previous?.spacer ?? null,
+      scroller.clientHeight * 1.25
+    );
+
+    cache.delete(key);
+    cache.set(key, { spacer: targetSpacer });
+    while (cache.size > EXIT_CACHE_LIMIT) {
+      const oldest = cache.keys().next().value as string | undefined;
+      if (oldest == null) break;
+      cache.delete(oldest);
+    }
+
+    // Write phase. One changed custom property is the only layout mutation.
+    if (Math.abs(currentExitPx - targetSpacer) > EXIT_TUNE_EPSILON_PX) {
+      content.style.setProperty("--lia-tff-slide-exit-space", `${targetSpacer.toFixed(2)}px`);
+      rememberSpacerResize(content);
+    }
   } catch (e) { }
 }
 

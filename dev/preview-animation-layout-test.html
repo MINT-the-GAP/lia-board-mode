@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Board Mode animation layout regression</title>
+  <style>
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body { font: 15px/1.4 sans-serif; }
+    .preview-shell { width: 100%; height: 100%; overflow: hidden; }
+    body.live-editor .preview-shell { width: 560px; border-right: 1px solid #888; }
+    #lia-toolbar-nav { box-sizing: border-box; height: 48px; }
+    .lia-header__left { display: flex; align-items: center; height: 48px; }
+    .lia-btn { width: 40px; height: 36px; }
+    .lia-slide__container {
+      box-sizing: border-box;
+      width: 100%;
+      height: calc(100vh - 48px);
+      overflow-y: auto;
+    }
+    main {
+      box-sizing: border-box;
+      width: 100%;
+      margin: 0;
+      padding: 16px;
+      font-size: 15px;
+    }
+    h1, p { margin: 0 0 12px; }
+    .responsive-columns {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
+      height: 44vh;
+    }
+    .responsive-columns > div { min-width: 0; border: 1px solid #aaa; }
+    .lia-effect { min-height: 8vh; }
+    [hidden] { display: none !important; }
+    #animation-layout-result {
+      position: fixed;
+      right: 4px;
+      bottom: 4px;
+      z-index: 30;
+      max-width: min(580px, calc(100vw - 8px));
+      max-height: 35vh;
+      overflow: auto;
+      margin: 0;
+      padding: 4px;
+      background: white;
+      border: 1px solid #777;
+      font: 11px/1.25 monospace;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="preview-shell">
+    <header id="lia-toolbar-nav">
+      <div class="lia-header__left">
+        <button id="lia-btn-toc" class="lia-btn" type="button">TOC</button>
+      </div>
+    </header>
+    <div class="lia-slide__container" id="slide-scroller">
+      <main class="lia-slide__content">
+        <div id="autoscrolling-marker" hidden aria-hidden="true"></div>
+        <h1 id="stable-heading">Persistent heading</h1>
+        <p>Content that stays visible through every animation step.</p>
+        <div class="responsive-columns">
+          <div>Responsive column A</div>
+          <div>Responsive column B</div>
+        </div>
+        <section class="lia-effect" id="step-1" hidden>
+          <p>First animated block with enough height to cross rounding boundaries.</p>
+        </section>
+        <section class="lia-effect" id="step-2" hidden>
+          <p>Second animated block with enough height to exercise the spacer cache.</p>
+        </section>
+        <p id="last-line">This is the permanently rendered final text line.</p>
+      </main>
+    </div>
+  </div>
+  <pre id="animation-layout-result">running</pre>
+
+  <script>
+    const parameters = new URLSearchParams(location.search);
+    const testMode = parameters.get('mode') === 'slides' ? 'slides' : 'presentation';
+    const autoscrolling = parameters.get('autoscrolling') === 'on' ? 'on' : 'off';
+    if (parameters.get('liveEditor') === 'narrow') document.body.classList.add('live-editor');
+    localStorage.setItem('settings', JSON.stringify({ mode: testMode, language: 'en' }));
+    localStorage.removeItem('lia-tff-font-px-v2');
+
+    const animationProbe = {
+      nativeScrollCalls: 0,
+      scrollWrites: 0,
+      scrollEvents: 0,
+      spacerWrites: 0,
+      fontWrites: [],
+      layoutShifts: []
+    };
+    const scroller = document.getElementById('slide-scroller');
+    const main = scroller.querySelector('main');
+    const marker = document.getElementById('autoscrolling-marker');
+    marker.setAttribute('data-lia-tff-autoscrolling', autoscrolling);
+
+    Element.prototype.scrollIntoView = function () {
+      animationProbe.nativeScrollCalls++;
+      const owner = this.closest && this.closest('.lia-slide__container');
+      if (!owner) return;
+      const main = this.closest('main');
+      const desired = (main ? main.offsetTop : 0) + this.offsetTop - owner.clientHeight * 0.55;
+      owner.scrollTop = Math.max(0, Math.min(owner.scrollHeight - owner.clientHeight, desired));
+    };
+
+    new MutationObserver(records => {
+      animationProbe.spacerWrites += records.filter(record =>
+        record.attributeName === 'style' &&
+        main.style.getPropertyValue('--lia-tff-slide-exit-space')
+      ).length;
+    }).observe(main, { attributes: true, attributeFilter: ['style'] });
+
+    new MutationObserver(() => {
+      animationProbe.fontWrites.push(
+        document.documentElement.style.getPropertyValue('--lia-tff-font').trim()
+      );
+    }).observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
+
+    if (typeof PerformanceObserver !== 'undefined') {
+      try {
+        new PerformanceObserver(list => {
+          for (const entry of list.getEntries()) {
+            if (entry.hadRecentInput) continue;
+            animationProbe.layoutShifts.push({
+              value: entry.value,
+              nodes: (entry.sources || []).map(source => {
+                const node = source.node;
+                return node && (node.id || node.className || node.localName);
+              })
+            });
+          }
+        }).observe({ type: 'layout-shift', buffered: true });
+      } catch (error) { }
+    }
+  </script>
+  <script src="../dist/index.js?t=animation-layout"></script>
+  <script>
+    (async function runAnimationLayoutTest() {
+      const result = document.getElementById('animation-layout-result');
+      const heading = document.getElementById('stable-heading');
+      const lastLine = document.getElementById('last-line');
+      const steps = [
+        document.getElementById('step-1'),
+        document.getElementById('step-2')
+      ];
+      const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
+      const spread = (values) => Math.max(...values) - Math.min(...values);
+      const phases = [];
+      const allSamples = [];
+
+      try {
+        for (let index = 0; index < 4; index++) await nextFrame();
+
+        const fontFrameSamples = [];
+        for (let index = 0; index < 4; index++) {
+          await nextFrame();
+          fontFrameSamples.push({
+            stylePresent: Boolean(document.getElementById('lia-tff-style-content-v2')),
+            font: parseFloat(getComputedStyle(main).fontSize),
+            variable: document.documentElement.style
+              .getPropertyValue('--lia-tff-font').trim()
+          });
+        }
+
+        const descriptorOwner = (() => {
+          let owner = scroller;
+          while (owner) {
+            const descriptor = Object.getOwnPropertyDescriptor(owner, 'scrollTop');
+            if (descriptor && descriptor.get && descriptor.set) return descriptor;
+            owner = Object.getPrototypeOf(owner);
+          }
+          return null;
+        })();
+        if (!descriptorOwner) throw new Error('scrollTop descriptor unavailable');
+        descriptorOwner.set.call(scroller, 32);
+        await nextFrame();
+        Object.defineProperty(scroller, 'scrollTop', {
+          configurable: true,
+          get() { return descriptorOwner.get.call(scroller); },
+          set(value) {
+            animationProbe.scrollWrites++;
+            descriptorOwner.set.call(scroller, value);
+          }
+        });
+        scroller.addEventListener('scroll', () => animationProbe.scrollEvents++);
+        animationProbe.scrollWrites = 0;
+        animationProbe.scrollEvents = 0;
+        const animationStartTop = scroller.scrollTop;
+
+        async function setStep(next, previous, label) {
+          document.querySelectorAll('#focused').forEach(element =>
+            element.removeAttribute('id')
+          );
+          steps.forEach((step, index) => { step.hidden = index >= next; });
+          const target = next > 0 ? steps[next - 1] : lastLine;
+          target.id = 'focused';
+
+          await Promise.resolve();
+          await nextFrame();
+          const layoutShiftStart = animationProbe.layoutShifts.length;
+          const eventStart = animationProbe.scrollEvents;
+          if (next > previous) target.scrollIntoView({ block: 'nearest' });
+
+          const samples = [];
+          for (let frame = 0; frame < 7; frame++) {
+            await nextFrame();
+            const headingRect = heading.getBoundingClientRect();
+            samples.push({
+              clientWidth: scroller.clientWidth,
+              scrollHeight: scroller.scrollHeight,
+              scrollTop: scroller.scrollTop,
+              headingX: headingRect.x,
+              headingY: headingRect.y,
+              overflow: scroller.scrollHeight > scroller.clientHeight + 0.5,
+              spacer: parseFloat(getComputedStyle(main)
+                .getPropertyValue('--lia-tff-slide-exit-space')) || 0
+            });
+          }
+          const stable = samples.slice(2);
+          phases.push({
+            label,
+            widthSpread: spread(stable.map(sample => sample.clientWidth)),
+            heightSpread: spread(stable.map(sample => sample.scrollHeight)),
+            topSpread: spread(stable.map(sample => sample.scrollTop)),
+            xSpread: spread(stable.map(sample => sample.headingX)),
+            ySpread: spread(stable.map(sample => sample.headingY)),
+            overflowStates: new Set(stable.map(sample => sample.overflow)).size,
+            layoutShifts: animationProbe.layoutShifts.length - layoutShiftStart,
+            scrollEvents: animationProbe.scrollEvents - eventStart
+          });
+          allSamples.push(...stable);
+        }
+
+        for (let cycle = 0; cycle < 8; cycle++) {
+          await setStep(1, 0, `cycle-${cycle}-forward-1`);
+          await setStep(2, 1, `cycle-${cycle}-forward-2`);
+          await setStep(1, 2, `cycle-${cycle}-back-1`);
+          await setStep(0, 1, `cycle-${cycle}-back-0`);
+        }
+
+        const writesAfterCycles = animationProbe.spacerWrites;
+        await new Promise(resolve => setTimeout(resolve, 400));
+        const idleSpacerWrites = animationProbe.spacerWrites - writesAfterCycles;
+        const topAfterAnimations = scroller.scrollTop;
+        const animationScrollWrites = animationProbe.scrollWrites;
+        const animationScrollEvents = animationProbe.scrollEvents;
+        const clientWidthSpread = spread(allSamples.map(sample => sample.clientWidth));
+        const headingXSpread = spread(allSamples.map(sample => sample.headingX));
+        const headingYSpread = spread(allSamples.map(sample => sample.headingY));
+        const scrollTopSpread = spread(allSamples.map(sample => sample.scrollTop));
+
+        descriptorOwner.set.call(scroller, scroller.scrollHeight - scroller.clientHeight);
+        await nextFrame();
+        const lastRect = lastLine.getBoundingClientRect();
+        const scrollerRect = scroller.getBoundingClientRect();
+        const visibleLastLineFraction =
+          (lastRect.bottom - (scrollerRect.top + scroller.clientTop)) / lastRect.height;
+
+        const beforeManual = scroller.scrollTop;
+        descriptorOwner.set.call(scroller, Math.max(0, beforeManual - 12));
+        await nextFrame();
+        const manualScrollDelta = Math.abs(scroller.scrollTop - beforeManual);
+
+        const stablePhases = phases.every(phase =>
+          phase.widthSpread <= 0.5 &&
+          phase.heightSpread <= 0.5 &&
+          phase.topSpread <= 0.5 &&
+          phase.xSpread <= 0.5 &&
+          phase.ySpread <= 0.5 &&
+          phase.overflowStates === 1 &&
+          phase.layoutShifts <= 2
+        );
+        const fontStable = fontFrameSamples.every(sample =>
+          sample.stylePresent && sample.font === 18 && sample.variable === '18px'
+        ) && !animationProbe.fontWrites.includes('unset');
+        const autoscrollStable = autoscrolling === 'off'
+          ? animationProbe.nativeScrollCalls === 0 &&
+            animationScrollWrites === 0 &&
+            animationScrollEvents === 0 &&
+            Math.abs(topAfterAnimations - animationStartTop) <= 0.5 &&
+            scrollTopSpread <= 0.5 &&
+            headingYSpread <= 0.5
+          : animationProbe.nativeScrollCalls === 16 &&
+            phases.every(phase => phase.scrollEvents <= 1);
+
+        const metrics = {
+          mode: testMode,
+          autoscrolling,
+          liveEditor: document.body.classList.contains('live-editor') ? 'narrow' : 'no',
+          stablePhases,
+          autoscrollStable,
+          fontStable,
+          clientWidthSpread,
+          headingXSpread,
+          headingYSpread,
+          scrollTopSpread,
+          nativeScrollCalls: animationProbe.nativeScrollCalls,
+          scrollWrites: animationScrollWrites,
+          scrollEvents: animationScrollEvents,
+          spacerWrites: animationProbe.spacerWrites,
+          idleSpacerWrites,
+          visibleLastLineFraction,
+          manualScrollDelta,
+          maxPhaseLayoutShifts: Math.max(...phases.map(phase => phase.layoutShifts)),
+          fontFrameSamples,
+          fontWrites: animationProbe.fontWrites,
+          phaseFailures: phases.filter(phase =>
+            phase.widthSpread > 0.5 ||
+            phase.heightSpread > 0.5 ||
+            phase.topSpread > 0.5 ||
+            phase.xSpread > 0.5 ||
+            phase.ySpread > 0.5 ||
+            phase.overflowStates !== 1 ||
+            phase.layoutShifts > 2
+          )
+        };
+        const pass =
+          stablePhases &&
+          autoscrollStable &&
+          fontStable &&
+          clientWidthSpread <= 0.5 &&
+          headingXSpread <= 0.5 &&
+          idleSpacerWrites === 0 &&
+          visibleLastLineFraction >= 0.25 &&
+          visibleLastLineFraction <= 0.55 &&
+          manualScrollDelta >= 10;
+
+        document.body.dataset.animationLayoutTest = pass ? 'pass' : 'fail';
+        result.textContent = JSON.stringify({ pass, ...metrics });
+      } catch (error) {
+        document.body.dataset.animationLayoutTest = 'fail';
+        result.textContent = JSON.stringify({
+          pass: false,
+          mode: testMode,
+          autoscrolling,
+          error: error && error.stack ? error.stack : String(error)
+        });
+      }
+    })();
+  </script>
+</body>
+</html>
