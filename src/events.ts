@@ -7,7 +7,6 @@ import {
 import { requestPositionUpdate, cancelPositionUpdate } from "./ui";
 import { getToolbarHeader } from "./toolbar";
 import { setPresFontPx } from "./font";
-import { consumeSlideExitSpaceResize } from "./css";
 import { isEditableKeyboardEvent } from "./keyboard";
 
 const teardown = new AbortController();
@@ -30,16 +29,11 @@ function initLayoutResizeObserver(tickFn: () => void): void {
   try {
     let targets = new Set<Element>();
     const ro = new ResizeObserver(entries => {
-      const externalEntries = entries.filter(entry =>
-        !consumeSlideExitSpaceResize(entry.target)
-      );
-      if (!externalEntries.length) return;
+      if (!entries.length) return;
       requestPositionUpdate();
       // A font change or newly loaded content can change slide geometry without
-      // a DOM attribute change. Recalculate its scroll spacer after that layout.
-      // Own spacer resizes were removed above, so they cannot form a
-      // read/write/ResizeObserver feedback loop across frames.
-      if (externalEntries.some(entry =>
+      // a DOM attribute change. Refresh the remaining responsive UI after it.
+      if (entries.some(entry =>
         entry.target.matches("main,.lia-slide__container")
       )) tickFn();
     });

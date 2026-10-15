@@ -219,8 +219,7 @@
               headingX: headingRect.x,
               headingY: headingRect.y,
               overflow: scroller.scrollHeight > scroller.clientHeight + 0.5,
-              spacer: parseFloat(getComputedStyle(main)
-                .getPropertyValue('--lia-tff-slide-exit-space')) || 0
+              spacer: parseFloat(getComputedStyle(main, '::after').height) || 0
             });
           }
           const stable = samples.slice(2);
@@ -255,6 +254,11 @@
         const headingXSpread = spread(allSamples.map(sample => sample.headingX));
         const headingYSpread = spread(allSamples.map(sample => sample.headingY));
         const scrollTopSpread = spread(allSamples.map(sample => sample.scrollTop));
+        const spacerSpread = spread(allSamples.map(sample => sample.spacer));
+        const expectedSpacer = innerHeight * 0.8;
+        const spacerDelta = Math.max(...allSamples.map(sample =>
+          Math.abs(sample.spacer - expectedSpacer)
+        ));
 
         descriptorOwner.set.call(scroller, scroller.scrollHeight - scroller.clientHeight);
         await nextFrame();
@@ -301,6 +305,9 @@
           headingXSpread,
           headingYSpread,
           scrollTopSpread,
+          spacerSpread,
+          expectedSpacer,
+          spacerDelta,
           nativeScrollCalls: animationProbe.nativeScrollCalls,
           scrollWrites: animationScrollWrites,
           scrollEvents: animationScrollEvents,
@@ -327,9 +334,10 @@
           fontStable &&
           clientWidthSpread <= 0.5 &&
           headingXSpread <= 0.5 &&
+          animationProbe.spacerWrites === 0 &&
           idleSpacerWrites === 0 &&
-          visibleLastLineFraction >= 0.25 &&
-          visibleLastLineFraction <= 0.55 &&
+          spacerSpread <= 0.5 &&
+          spacerDelta <= 0.5 &&
           manualScrollDelta >= 10;
 
         document.body.dataset.animationLayoutTest = pass ? 'pass' : 'fail';

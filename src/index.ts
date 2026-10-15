@@ -7,7 +7,7 @@ import { syncAutoscrolling } from "./autoscrolling";
 
 import { initInstance, I, ROOT_WIN } from "./state";
 import { detectMode, applyModeAttr, safeGetSettingsRaw } from "./mode";
-import { ensureContentCSS, ensureRootCSS, syncAccent, syncDarkMode, syncSlideExitSpace } from "./css";
+import { ensureContentCSS, ensureRootCSS, syncAccent, syncDarkMode } from "./css";
 import { applyFontLogic, syncSliderToCurrent } from "./font";
 import { syncNightlyMiniMode } from "./toolbar";
 import {
@@ -61,8 +61,6 @@ import { initAuthorComments } from "./authorComments";
           I.lastMode = mode;
           I.lastSettingsRaw = settingsRaw;
         }
-
-        syncSlideExitSpace(mode);
 
         syncSliderToCurrent();
         syncFontSizeLabel();
