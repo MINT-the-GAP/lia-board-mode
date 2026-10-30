@@ -18,9 +18,11 @@ import {
 import { wireOnce, initEvents } from "./events";
 import { initModeOnly, applyModeOnlyNow } from "./modeOnly";
 import { initAuthorComments } from "./authorComments";
+import { initHorizontalQuizCompatibility } from "./horizontalQuizCompatibility";
 
 (function () {
   if (!initInstance()) return;
+  initHorizontalQuizCompatibility();
   initAuthorComments();
   initReverseNavigation();
   initPresenterSupport();

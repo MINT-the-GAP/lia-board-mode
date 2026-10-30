@@ -212,3 +212,34 @@ Choose the right option.
 -[( )] false
 -[(X)] right
 -[( )] false
+
+### Compatibility with LiaScript 2.5.0
+
+The existing `<!-- horizontal-quiz -->` annotation and ordinary single-/
+multiple-choice syntax stay unchanged. Board mode automatically works around
+the confirmed LiaScript 2.5.0 parser issue where a preceding
+`@Auswertung(Send)` expansion can nest later questions inside an answer.
+
+The compatibility module verifies the original source and the known inert
+`Auswertung` definition. It expands that marker only in a temporary copy of
+LiaScript's internal section source and rebuilds the native quizzes. It does not
+convert them to matrices, move their DOM nodes, or overwrite the authored file
+or cached source. Already initialized scripts and resources are not run again.
+
+This is a targeted compatibility shim for version 2.5.0 and its checked internal
+database interface. It runs only before answers or other course input have
+begun. It skips submissions/frozen sessions, affected sections with stored
+answers, mismatching/stale cached source, and courses with executable body
+scripts. Unsupported runtime interfaces are left alone. The normal horizontal
+CSS remains independent of this compatibility check.
+
+The original-syntax regression fixture is
+[dev/horizontal-quiz-course.md](dev/horizontal-quiz-course.md). After building,
+run the browser test with Chrome and an existing Playwright installation
+(optionally selected through `PLAYWRIGHT_MODULE`):
+
+```text
+npm run build
+node dev/test-horizontal-source.cjs
+node dev/test-horizontal-quiz.cjs
+```
