@@ -12,6 +12,7 @@ type Section = { title: { Chars?: string }[]; code: string; indentation: number 
 type Snapshot = { readme: string; version: number; sections: Section[];
   definition: { version: string; macro: Record<string, string>; resources: unknown[]; onload: string };
   [key: string]: any };
+type AnnotationGate = { quietFor: () => number; resume: () => void };
 
 function request(cmd: string, param: unknown, reply = false): Event {
   return { reply, track: [], service: 'db', message: { cmd, param } };
@@ -118,7 +119,9 @@ export function expandEvaluation(code: string, markup: string): string {
 }
 
 function inertBody(code: string, macros: Record<string, string>, seen = new Set<string>()): boolean {
-  if (/<script\b|\bon\w+\s*=|@\[|^\s*```[^\n]*@/im.test(code)) return false;
+  // Event-handler attributes are passive while LiaScript reparses HTML. Keep
+  // blocking executable script bodies and reference/code-block macros.
+  if (/<script\b|@\[|^\s*```[^\n]*@/im.test(code)) return false;
   for (const match of code.matchAll(/(?:^|[^\w\\])@([A-Za-z][\w.-]*)/g)) {
     const name = match[1];
     if (seen.has(name)) continue;
@@ -141,6 +144,44 @@ function pristine(): boolean {
 
 function malformed(): boolean {
   return !!CONTENT_DOC.querySelector('.lia-quiz[horizontal-quiz] .lia-quiz');
+}
+
+// lia-annotation inserts its overlay as an unmanaged direct child of <main>.
+// Elm's virtual-DOM diff cannot reconcile that child while index_restore
+// replaces the slide, which duplicates all quiz nodes after the first one.
+// Keep the overlay detached until the restore and its follow-up messages have
+// settled, then let lia-annotation rebuild it from its own persistent store.
+function suspendAnnotationOverlay(): AnnotationGate | null {
+  const api = (ROOT_WIN as any).__LIA_ANNOTATION__;
+  const shells = () => Array.from(CONTENT_DOC.querySelectorAll<HTMLElement>('main > .lia-annot-shell'));
+  if (typeof api?.refresh !== 'function' || !shells().length) return null;
+
+  let lastContentMutation = Date.now();
+  let resumed = false;
+  const isShell = (node: Node) => node instanceof Element && node.classList.contains('lia-annot-shell');
+  const detach = () => shells().forEach(shell => shell.remove());
+  const observer = new MutationObserver(records => {
+    if (records.some(record =>
+      [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)].some(node => !isShell(node)))) {
+      lastContentMutation = Date.now();
+    }
+    detach();
+  });
+  observer.observe(CONTENT_DOC.documentElement, { childList: true, subtree: true });
+  detach();
+
+  return {
+    quietFor: () => Date.now() - lastContentMutation,
+    resume: () => {
+      if (resumed) return;
+      resumed = true;
+      detach();
+      observer.disconnect();
+      ROOT_WIN.requestAnimationFrame(() => {
+        try { api.refresh(); } catch { /* Optional peer plugin. */ }
+      });
+    },
+  };
 }
 
 async function savedAnswers(db: Database, sections: Set<number>): Promise<boolean> {
@@ -187,6 +228,7 @@ export function initHorizontalQuizCompatibility(): void {
     const controller = new AbortController();
     const deadline = ROOT_WIN.setTimeout(() => controller.abort(), 4000);
     let releaseStore = () => {};
+    let resumeAnnotation = () => {};
     try {
       const db = database();
       if (!db) return;
@@ -254,14 +296,32 @@ export function initHorizontalQuizCompatibility(): void {
         if (db.handle === wrapped) db.handle = originalHandle;
       };
       db.handle = wrapped;
+      const annotation = suspendAnnotationOverlay();
+      if (annotation) resumeAnnotation = annotation.resume;
       finish();
       lia.send(request('index_restore', model, true));
+      if (annotation) {
+        // index_restore first paints the corrected slide and then processes
+        // follow-up messages. Resume only after both the DOM and LiaScript's
+        // event queue have stayed quiet long enough for the second paint.
+        let stableSince = 0;
+        for (let tries = 0; tries < 40; tries++) {
+          if (!malformed() && lia.eventSemaphore === 0 && annotation.quietFor() >= 350) {
+            if (!stableSince) stableSince = Date.now();
+            if (Date.now() - stableSince >= 200) break;
+          } else stableSince = 0;
+          await new Promise(resolve => ROOT_WIN.setTimeout(resolve, 50));
+        }
+        resumeAnnotation();
+        resumeAnnotation = () => {};
+      }
       // No timeout: even a delayed metadata event must never persist the
       // transport-only definition. The handler removes itself on that event.
     } catch (error) {
       releaseStore();
       console.warn('[lia-board-mode] Horizontal quiz compatibility skipped.', error);
     } finally {
+      resumeAnnotation();
       ROOT_WIN.clearTimeout(deadline);
       finish();
     }

@@ -13,6 +13,12 @@ window.__hqOnload = (window.__hqOnload || 0) + 1;
 @Auswertung
 <div data-snapshot-eval="1" style="display:none;"></div>
 @end
+
+@Abgabe
+<div class="lia-submit-box">
+  <button type="button" onclick="window.__hqSubmissionClick = true; return false;">Create Link</button>
+</div>
+@end
 -->
 
 # Reflexion der LiaScript-Fortbildung
@@ -131,6 +137,8 @@ window.__hqOnload = (window.__hqOnload || 0) + 1;
 > Möchten Sie dem Fortbildenden noch etwas mitteilen?
 
 [[___ ___ ___]]
+
+@Abgabe
 
 
 

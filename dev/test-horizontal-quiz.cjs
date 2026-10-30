@@ -32,12 +32,18 @@ async function runDeployment(browser, deployment) {
       return main.querySelectorAll('.lia-quiz').length === 8 &&
         main.querySelectorAll('.lia-quiz .lia-quiz').length === 0 &&
         marked.length === 6 && marked.every(quiz =>
-          quiz.querySelectorAll(':scope > .lia-quiz__answers > .lia-label').length === 5);
+          quiz.querySelectorAll(':scope > .lia-quiz__answers > .lia-label').length === 5) &&
+        main.querySelectorAll(':scope > .lia-annot-shell').length === 1;
     }, null, { timeout: 30000 });
   }
   async function checkCounters() {
-    const counters = await page.evaluate(() => ({ onload: window.__hqOnload, resource: window.__hqResource }));
-    assert.deepEqual(counters, { onload: 1, resource: 1 }, 'Runtime repair must not execute resources/onload twice');
+    const counters = await page.evaluate(() => ({
+      onload: window.__hqOnload,
+      resource: window.__hqResource,
+      annotationShells: document.querySelectorAll('main > .lia-annot-shell').length,
+    }));
+    assert.deepEqual(counters, { onload: 1, resource: 1, annotationShells: 1 },
+      'Runtime repair must preserve the annotation overlay and execute resources/onload once');
   }
   async function checkCache() {
     return page.evaluate(async url => {
@@ -112,7 +118,27 @@ async function runDeployment(browser, deployment) {
       }
       if (url === scriptUrl) return route.fulfill({
         status: 200, contentType: 'text/javascript; charset=utf-8',
-        body: 'window.__hqResource = (window.__hqResource || 0) + 1;',
+        body: [
+          'window.__hqResource = (window.__hqResource || 0) + 1;',
+          '(() => {',
+          '  const refresh = () => {',
+          '    const main = document.querySelector(\"main:not([hidden])\");',
+          '    if (!main) return;',
+          '    main.classList.add(\"lia-annot-host\");',
+          '    let shell = main.querySelector(\":scope > .lia-annot-shell\");',
+          '    if (!shell) {',
+          '      shell = document.createElement(\"div\");',
+          '      shell.className = \"lia-annot-shell\";',
+          '      shell.setAttribute(\"aria-hidden\", \"true\");',
+          '    }',
+          '    const header = main.querySelector(\":scope > header\");',
+          '    main.insertBefore(shell, header?.nextSibling || main.firstChild);',
+          '  };',
+          '  window.__LIA_ANNOTATION__ = { refresh };',
+          '  window.setInterval(refresh, 100);',
+          '  for (const delay of [0, 80, 250, 700]) setTimeout(refresh, delay);',
+          '})();',
+        ].join('\n'),
         headers: { 'access-control-allow-origin': '*' },
       });
       const resource = resources.get(url);
@@ -128,6 +154,7 @@ async function runDeployment(browser, deployment) {
     });
     await waitForRepair();
     await checkCounters();
+    checks.push('Annotation overlay preserved across runtime rebuild');
     assert.equal(await page.locator('main').count(), 2, 'Repair must not duplicate course sections');
     assert.equal(await page.locator('main:not([hidden]) .lia-quiz-matrix tbody tr').count(), 8);
     assert.equal(await page.locator('main:not([hidden]) .lia-quiz-text').count(), 1);
